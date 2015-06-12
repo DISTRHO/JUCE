@@ -67,7 +67,6 @@
 #include "includes/state.h"
 #include "includes/time.h"
 #include "includes/ui.h"
-#include "includes/units.h"
 #include "includes/urid.h"
 #include "includes/lv2_external_ui.h"
 #include "includes/lv2_programs.h"
@@ -249,13 +248,12 @@ const String makePluginFile (AudioProcessor* const filter)
     String text;
 
     // Header
-    text += "@prefix atom:  <" LV2_ATOM_PREFIX "> .\n";
-    text += "@prefix doap:  <http://usefulinc.com/ns/doap#> .\n";
-    text += "@prefix foaf:  <http://xmlns.com/foaf/0.1/> .\n";
-    text += "@prefix lv2:   <" LV2_CORE_PREFIX "> .\n";
-    text += "@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .\n";
-    text += "@prefix ui:    <" LV2_UI_PREFIX "> .\n";
-    text += "@prefix units: <" LV2_UNITS_PREFIX "> .\n";
+    text += "@prefix atom: <" LV2_ATOM_PREFIX "> .\n";
+    text += "@prefix doap: <http://usefulinc.com/ns/doap#> .\n";
+    text += "@prefix foaf: <http://xmlns.com/foaf/0.1/> .\n";
+    text += "@prefix lv2:  <" LV2_CORE_PREFIX "> .\n";
+    text += "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n";
+    text += "@prefix ui:   <" LV2_UI_PREFIX "> .\n";
     text += "\n";
 
     // Plugin
@@ -398,18 +396,6 @@ const String makePluginFile (AudioProcessor* const filter)
         text += "        lv2:default " + String::formatted("%f", safeParamValue(filter->getParameter(i))) + " ;\n";
         text += "        lv2:minimum 0.0 ;\n";
         text += "        lv2:maximum 1.0 ;\n";
-
-        String label(filter->getParameterLabel(i));
-
-        if (label.isNotEmpty())
-        {
-            text += "        units:unit [\n";
-            text += "            a units:Unit ;\n";
-            text += "            rdfs:label   \"" + label + "\" ;\n";
-            text += "            units:symbol \"" + label + "\" ;\n";
-            text += "            units:render \"%f " + label + "\" ;\n";
-            text += "        ] ;\n";
-        }
 
         if (! filter->isParameterAutomatable(i))
             text += "        lv2:portProperty <" LV2_PORT_PROPS__expensive "> ;\n";
@@ -871,7 +857,7 @@ public:
 #if JucePlugin_ProducesMidiOutput
         controlPortOffset += 1;
 #endif
-        controlPortOffset += 2; // freewheel and sampleRate
+        controlPortOffset += 2; // freewheel and latency
         controlPortOffset += JucePlugin_MaxNumInputChannels;
         controlPortOffset += JucePlugin_MaxNumOutputChannels;
 
