@@ -1105,6 +1105,7 @@ public:
           uridMap (nullptr),
           uridAtomBlank (0),
           uridAtomObject (0),
+          uridAtomDouble (0),
           uridAtomFloat (0),
           uridAtomInt (0),
           uridAtomLong (0),
@@ -1186,6 +1187,7 @@ public:
 
             uridAtomBlank = uridMap->map(uridMap->handle, LV2_ATOM__Blank);
             uridAtomObject = uridMap->map(uridMap->handle, LV2_ATOM__Object);
+            uridAtomDouble = uridMap->map(uridMap->handle, LV2_ATOM__Double);
             uridAtomFloat = uridMap->map(uridMap->handle, LV2_ATOM__Float);
             uridAtomInt = uridMap->map(uridMap->handle, LV2_ATOM__Int);
             uridAtomLong = uridMap->map(uridMap->handle, LV2_ATOM__Long);
@@ -1399,59 +1401,140 @@ public:
 
                             LV2_Atom* bar = nullptr;
                             LV2_Atom* barBeat = nullptr;
-                            LV2_Atom* beatsPerBar = nullptr;
-                            LV2_Atom* bpm = nullptr;
                             LV2_Atom* beatUnit = nullptr;
+                            LV2_Atom* beatsPerBar = nullptr;
+                            LV2_Atom* beatsPerMinute = nullptr;
                             LV2_Atom* frame = nullptr;
                             LV2_Atom* speed = nullptr;
 
                             lv2_atom_object_get (obj,
                                                  uridTimeBar, &bar,
                                                  uridTimeBarBeat, &barBeat,
-                                                 uridTimeBeatsPerBar, &beatsPerBar,
-                                                 uridTimeBeatsPerMinute, &bpm,
                                                  uridTimeBeatUnit, &beatUnit,
+                                                 uridTimeBeatsPerBar, &beatsPerBar,
+                                                 uridTimeBeatsPerMinute, &beatsPerMinute,
                                                  uridTimeFrame, &frame,
                                                  uridTimeSpeed, &speed,
                                                  nullptr);
 
-                            if (bpm != nullptr && bpm->type == uridAtomFloat)
-                                curPosInfo.bpm = ((LV2_Atom_Float*)bpm)->body;
-
-                            if (beatsPerBar != nullptr && beatsPerBar->type == uridAtomFloat)
+                            // need to handle this first as other values depend on it
+                            if (speed != nullptr)
                             {
-                                float beatsPerBarValue = ((LV2_Atom_Float*)beatsPerBar)->body;
-                                curPosInfo.timeSigNumerator = beatsPerBarValue;
+                                /**/ if (speed->type == uridAtomDouble)
+                                    lastPositionData.speed = ((LV2_Atom_Double*)speed)->body;
+                                else if (speed->type == uridAtomFloat)
+                                    lastPositionData.speed = ((LV2_Atom_Float*)speed)->body;
+                                else if (speed->type == uridAtomInt)
+                                    lastPositionData.speed = ((LV2_Atom_Int*)speed)->body;
+                                else if (speed->type == uridAtomLong)
+                                    lastPositionData.speed = ((LV2_Atom_Long*)speed)->body;
 
-                                if (bar != nullptr && bar->type == uridAtomLong)
-                                {
-                                    float barValue = ((LV2_Atom_Long*)bar)->body;
-                                    curPosInfo.ppqPositionOfLastBarStart = barValue * beatsPerBarValue;
+                                curPosInfo.isPlaying = lastPositionData.speed != 0.0;
+                            }
 
-                                    if (barBeat != nullptr && barBeat->type == uridAtomFloat)
-                                    {
-                                        float barBeatValue = ((LV2_Atom_Float*)barBeat)->body;
-                                        curPosInfo.ppqPosition = curPosInfo.ppqPositionOfLastBarStart + barBeatValue;
-                                    }
-                                }
+                            if (bar != nullptr)
+                            {
+                                /**/ if (bar->type == uridAtomDouble)
+                                    lastPositionData.bar = ((LV2_Atom_Double*)bar)->body;
+                                else if (bar->type == uridAtomFloat)
+                                    lastPositionData.bar = ((LV2_Atom_Float*)bar)->body;
+                                else if (bar->type == uridAtomInt)
+                                    lastPositionData.bar = ((LV2_Atom_Int*)bar)->body;
+                                else if (bar->type == uridAtomLong)
+                                    lastPositionData.bar = ((LV2_Atom_Long*)bar)->body;
+                            }
+
+                            if (barBeat != nullptr)
+                            {
+                                /**/ if (barBeat->type == uridAtomDouble)
+                                    lastPositionData.barBeat = ((LV2_Atom_Double*)barBeat)->body;
+                                else if (barBeat->type == uridAtomFloat)
+                                    lastPositionData.barBeat = ((LV2_Atom_Float*)barBeat)->body;
+                                else if (barBeat->type == uridAtomInt)
+                                    lastPositionData.barBeat = ((LV2_Atom_Int*)barBeat)->body;
+                                else if (barBeat->type == uridAtomLong)
+                                    lastPositionData.barBeat = ((LV2_Atom_Long*)barBeat)->body;
                             }
 
                             if (beatUnit != nullptr)
                             {
-                                if (beatUnit->type == uridAtomInt)
-                                    curPosInfo.timeSigDenominator = ((LV2_Atom_Int*)beatUnit)->body;
+                                /**/ if (beatUnit->type == uridAtomDouble)
+                                    lastPositionData.beatUnit = ((LV2_Atom_Double*)beatUnit)->body;
                                 else if (beatUnit->type == uridAtomFloat)
-                                    curPosInfo.timeSigDenominator = ((LV2_Atom_Float*)beatUnit)->body;
+                                    lastPositionData.beatUnit = ((LV2_Atom_Float*)beatUnit)->body;
+                                else if (beatUnit->type == uridAtomInt)
+                                    lastPositionData.beatUnit = ((LV2_Atom_Int*)beatUnit)->body;
+                                else if (beatUnit->type == uridAtomLong)
+                                    lastPositionData.beatUnit = ((LV2_Atom_Long*)beatUnit)->body;
+
+                                if (lastPositionData.beatUnit > 0)
+                                    curPosInfo.timeSigDenominator = lastPositionData.beatUnit;
                             }
 
-                            if (frame != nullptr && frame->type == uridAtomLong)
+                            if (beatsPerBar != nullptr)
                             {
-                                curPosInfo.timeInSamples = ((LV2_Atom_Long*)frame)->body;
-                                curPosInfo.timeInSeconds = double(curPosInfo.timeInSamples)/sampleRate;
+                                /**/ if (beatsPerBar->type == uridAtomDouble)
+                                    lastPositionData.beatsPerBar = ((LV2_Atom_Double*)beatsPerBar)->body;
+                                else if (beatsPerBar->type == uridAtomFloat)
+                                    lastPositionData.beatsPerBar = ((LV2_Atom_Float*)beatsPerBar)->body;
+                                else if (beatsPerBar->type == uridAtomInt)
+                                    lastPositionData.beatsPerBar = ((LV2_Atom_Int*)beatsPerBar)->body;
+                                else if (beatsPerBar->type == uridAtomLong)
+                                    lastPositionData.beatsPerBar = ((LV2_Atom_Long*)beatsPerBar)->body;
+
+                                if (lastPositionData.beatsPerBar > 0.0f)
+                                    curPosInfo.timeSigNumerator = lastPositionData.beatsPerBar;
                             }
 
-                            if (speed != nullptr && speed->type == uridAtomFloat)
-                                curPosInfo.isPlaying = ((LV2_Atom_Float*)speed)->body == 1.0f;
+                            if (beatsPerMinute != nullptr)
+                            {
+                                /**/ if (beatsPerMinute->type == uridAtomDouble)
+                                    lastPositionData.beatsPerMinute = ((LV2_Atom_Double*)beatsPerMinute)->body;
+                                else if (beatsPerMinute->type == uridAtomFloat)
+                                    lastPositionData.beatsPerMinute = ((LV2_Atom_Float*)beatsPerMinute)->body;
+                                else if (beatsPerMinute->type == uridAtomInt)
+                                    lastPositionData.beatsPerMinute = ((LV2_Atom_Int*)beatsPerMinute)->body;
+                                else if (beatsPerMinute->type == uridAtomLong)
+                                    lastPositionData.beatsPerMinute = ((LV2_Atom_Long*)beatsPerMinute)->body;
+
+                                if (lastPositionData.beatsPerMinute > 0.0f)
+                                {
+                                    curPosInfo.bpm = lastPositionData.beatsPerMinute;
+
+                                    if (lastPositionData.speed != 0)
+                                        curPosInfo.bpm *= std::abs(lastPositionData.speed);
+                                }
+                            }
+
+                            if (frame != nullptr)
+                            {
+                                /**/ if (frame->type == uridAtomDouble)
+                                    lastPositionData.frame = ((LV2_Atom_Double*)frame)->body;
+                                else if (frame->type == uridAtomFloat)
+                                    lastPositionData.frame = ((LV2_Atom_Float*)frame)->body;
+                                else if (frame->type == uridAtomInt)
+                                    lastPositionData.frame = ((LV2_Atom_Int*)frame)->body;
+                                else if (frame->type == uridAtomLong)
+                                    lastPositionData.frame = ((LV2_Atom_Long*)frame)->body;
+
+                                if (lastPositionData.frame >= 0)
+                                {
+                                    curPosInfo.timeInSamples = lastPositionData.frame;
+                                    curPosInfo.timeInSeconds = double(curPosInfo.timeInSamples)/sampleRate;
+                                }
+                            }
+
+                            if (lastPositionData.bar >= 0 && lastPositionData.beatsPerBar > 0.0f)
+                            {
+                                curPosInfo.ppqPositionOfLastBarStart = lastPositionData.bar * lastPositionData.beatsPerBar;
+
+                                if (lastPositionData.barBeat >= 0.0f)
+                                    curPosInfo.ppqPosition = curPosInfo.ppqPositionOfLastBarStart + lastPositionData.barBeat;
+                            }
+
+                            lastPositionData.extraValid = (lastPositionData.beatsPerMinute > 0.0 &&
+                                                           lastPositionData.beatUnit > 0 &&
+                                                           lastPositionData.beatsPerBar > 0.0f);
                         }
  #endif
                     }
@@ -1463,6 +1546,52 @@ public:
                 }
             }
         }
+
+#if JucePlugin_WantsLV2TimePos
+        // update timePos for next callback
+        if (lastPositionData.speed != 0.0)
+        {
+            if (lastPositionData.speed > 0.0)
+            {
+                // playing forwards
+                lastPositionData.frame += sampleCount;
+            }
+            else
+            {
+                // playing backwards
+                lastPositionData.frame -= sampleCount;
+
+                if (lastPositionData.frame < 0)
+                    lastPositionData.frame = 0;
+            }
+
+            curPosInfo.timeInSamples = lastPositionData.frame;
+            curPosInfo.timeInSeconds = double(curPosInfo.timeInSamples)/sampleRate;
+
+            if (lastPositionData.extraValid)
+            {
+                const double beatsPerMinute = lastPositionData.beatsPerMinute * lastPositionData.speed;
+                const double framesPerBeat  = 60.0 * sampleRate / beatsPerMinute;
+                const double addedBarBeats  = double(sampleCount) / framesPerBeat;
+
+                if (lastPositionData.bar >= 0 && lastPositionData.barBeat >= 0.0f)
+                {
+                    lastPositionData.bar    += std::floor((lastPositionData.barBeat+addedBarBeats)/
+                                                           lastPositionData.beatsPerBar);
+                    lastPositionData.barBeat = std::fmod(lastPositionData.barBeat+addedBarBeats,
+                                                         lastPositionData.beatsPerBar);
+
+                    if (lastPositionData.bar < 0)
+                        lastPositionData.bar = 0;
+
+                    curPosInfo.ppqPositionOfLastBarStart = lastPositionData.bar * lastPositionData.beatsPerBar;
+                    curPosInfo.ppqPosition = curPosInfo.ppqPositionOfLastBarStart + lastPositionData.barBeat;
+                }
+
+                curPosInfo.bpm = std::abs(beatsPerMinute);
+            }
+        }
+#endif
 
         if (! midiEvents.isEmpty())
         {
@@ -1711,9 +1840,32 @@ private:
     Array<float> lastControlValues;
     AudioPlayHead::CurrentPositionInfo curPosInfo;
 
+    struct Lv2PositionData {
+        int64_t  bar;
+        float    barBeat;
+        uint32_t beatUnit;
+        float    beatsPerBar;
+        float    beatsPerMinute;
+        int64_t  frame;
+        double   speed;
+        bool     extraValid;
+
+        Lv2PositionData()
+            : bar(-1),
+              barBeat(-1.0f),
+              beatUnit(0),
+              beatsPerBar(0.0f),
+              beatsPerMinute(0.0f),
+              frame(-1),
+              speed(0.0),
+              extraValid(false) {}
+    };
+    Lv2PositionData lastPositionData;
+
     const LV2_URID_Map* uridMap;
     LV2_URID uridAtomBlank;
     LV2_URID uridAtomObject;
+    LV2_URID uridAtomDouble;
     LV2_URID uridAtomFloat;
     LV2_URID uridAtomInt;
     LV2_URID uridAtomLong;
