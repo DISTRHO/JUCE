@@ -25,7 +25,7 @@
 namespace
 {
     const char* const osxVersionDefault         = "default";
-    const int oldestSDKVersion = 4;
+    const int oldestSDKVersion  = 5;
     const int currentSDKVersion = 10;
 
     const char* const osxArch_Default           = "default";
@@ -225,22 +225,24 @@ protected:
             }
             else
             {
-                StringArray versionNames;
+                StringArray sdkVersionNames, osxVersionNames;
                 Array<var> versionValues;
 
-                versionNames.add ("Use Default");
+                sdkVersionNames.add ("Use Default");
+                osxVersionNames.add ("Use Default");
                 versionValues.add (osxVersionDefault);
 
                 for (int ver = oldestSDKVersion; ver <= currentSDKVersion; ++ver)
                 {
-                    versionNames.add (getSDKName (ver));
+                    sdkVersionNames.add (getSDKName (ver));
+                    osxVersionNames.add (getOSXVersionName (ver));
                     versionValues.add (getSDKName (ver));
                 }
 
-                props.add (new ChoicePropertyComponent (getMacSDKVersionValue(), "OSX Base SDK Version", versionNames, versionValues),
+                props.add (new ChoicePropertyComponent (getMacSDKVersionValue(), "OSX Base SDK Version", sdkVersionNames, versionValues),
                            "The version of OSX to link against in the XCode build.");
 
-                props.add (new ChoicePropertyComponent (getMacCompatibilityVersionValue(), "OSX Compatibility Version", versionNames, versionValues),
+                props.add (new ChoicePropertyComponent (getMacCompatibilityVersionValue(), "OSX Deployment Target", osxVersionNames, versionValues),
                            "The minimum version of OSX that the target binary will be compatible with.");
 
                 const char* osxArch[] = { "Use Default", "Native architecture of build machine",
@@ -1496,36 +1498,29 @@ private:
         return file.hasFileExtension (sourceFileExtensions);
     }
 
-    static String getSDKName (int version)
+    static String getOSXVersionName (int version)
     {
         jassert (version >= 4);
-        return "10." + String (version) + " SDK";
+        return "10." + String (version);
+    }
+
+    static String getSDKName (int version)
+    {
+        return getOSXVersionName (version) + " SDK";
     }
 
     void initialiseDependencyPathValues()
     {
-        vst2Path.referTo (Value (new DependencyPathValueSource (
-             getSetting (Ids::vstFolder),
-             DependencyPath::vst2KeyName,
-             DependencyPath::osx
-        )));
+        vst2Path.referTo (Value (new DependencyPathValueSource (getSetting (Ids::vstFolder),
+                                                                Ids::vst2Path, TargetOS::osx)));
 
-        vst3Path.referTo (Value (new DependencyPathValueSource (
-             getSetting (Ids::vst3Folder),
-             DependencyPath::vst3KeyName,
-             DependencyPath::osx
-        )));
+        vst3Path.referTo (Value (new DependencyPathValueSource (getSetting (Ids::vst3Folder),
+                                                                Ids::vst3Path, TargetOS::osx)));
 
-        aaxPath.referTo (Value (new DependencyPathValueSource (
-             getSetting (Ids::aaxFolder),
-             DependencyPath::aaxKeyName,
-             DependencyPath::osx
-        )));
+        aaxPath.referTo (Value (new DependencyPathValueSource (getSetting (Ids::aaxFolder),
+                                                               Ids::aaxPath, TargetOS::osx)));
 
-        rtasPath.referTo (Value (new DependencyPathValueSource (
-             getSetting (Ids::rtasFolder),
-             DependencyPath::rtasKeyName,
-             DependencyPath::osx
-        )));
+        rtasPath.referTo (Value (new DependencyPathValueSource (getSetting (Ids::rtasFolder),
+                                                                Ids::rtasPath, TargetOS::osx)));
     }
 };
