@@ -26,7 +26,7 @@ namespace
 {
     const char* const osxVersionDefault         = "default";
     const int oldestSDKVersion  = 5;
-    const int currentSDKVersion = 10;
+    const int currentSDKVersion = 11;
 
     const char* const osxArch_Default           = "default";
     const char* const osxArch_Native            = "Native";
@@ -643,6 +643,7 @@ private:
 
                     addPlistDictionaryKey (dict2, "CFBundleTypeName", ex);
                     addPlistDictionaryKey (dict2, "CFBundleTypeRole", "Editor");
+                    addPlistDictionaryKey (dict2, "CFBundleTypeIconFile", "Icon");
                     addPlistDictionaryKey (dict2, "NSPersistentStoreTypeKey", "XML");
                 }
 
@@ -1415,8 +1416,8 @@ private:
         const char* extent;
         const char* scale;
         const char* filename;
-        const int   width;
-        const int   height;
+        int width;
+        int height;
     };
 
     static Array<ImageType> getiOSLaunchImageTypes()
@@ -1566,16 +1567,9 @@ private:
 
     void initialiseDependencyPathValues()
     {
-        vst2Path.referTo (Value (new DependencyPathValueSource (getSetting (Ids::vstFolder),
-                                                                Ids::vst2Path, TargetOS::osx)));
-
-        vst3Path.referTo (Value (new DependencyPathValueSource (getSetting (Ids::vst3Folder),
-                                                                Ids::vst3Path, TargetOS::osx)));
-
-        aaxPath.referTo (Value (new DependencyPathValueSource (getSetting (Ids::aaxFolder),
-                                                               Ids::aaxPath, TargetOS::osx)));
-
-        rtasPath.referTo (Value (new DependencyPathValueSource (getSetting (Ids::rtasFolder),
-                                                                Ids::rtasPath, TargetOS::osx)));
+        vst2Path.referTo (Value (new DependencyPathValueSource (getSetting (Ids::vstFolder),  Ids::vst2Path, TargetOS::osx)));
+        vst3Path.referTo (Value (new DependencyPathValueSource (getSetting (Ids::vst3Folder), Ids::vst3Path, TargetOS::osx)));
+        aaxPath. referTo (Value (new DependencyPathValueSource (getSetting (Ids::aaxFolder),  Ids::aaxPath,  TargetOS::osx)));
+        rtasPath.referTo (Value (new DependencyPathValueSource (getSetting (Ids::rtasFolder), Ids::rtasPath, TargetOS::osx)));
     }
 };
