@@ -1613,7 +1613,7 @@ public:
         {
             const uint32_t capacity = portMidiOut->atom.size;
 
-            portMidiOut->atom.size = 0;
+            portMidiOut->atom.size = sizeof(LV2_Atom_Sequence_Body);
             portMidiOut->atom.type = uridAtomSequence;
             portMidiOut->body.unit = 0;
             portMidiOut->body.pad  = 0;
