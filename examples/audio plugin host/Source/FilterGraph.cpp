@@ -45,11 +45,14 @@ FilterGraph::FilterGraph (AudioPluginFormatManager& formatManager_)
     addFilter (internalFormat.getDescriptionFor (InternalPluginFormat::midiInputFilter),   0.25f, 0.1f);
     addFilter (internalFormat.getDescriptionFor (InternalPluginFormat::audioOutputFilter), 0.5f,  0.9f);
 
+    graph.addListener (this);
+
     setChangedFlag (false);
 }
 
 FilterGraph::~FilterGraph()
 {
+    graph.addListener (this);
     graph.clear();
 }
 
@@ -78,24 +81,44 @@ void FilterGraph::addFilter (const PluginDescription* desc, double x, double y)
 {
     if (desc != nullptr)
     {
-        AudioProcessorGraph::Node* node = nullptr;
+        struct AsyncCallback : public AudioPluginFormat::InstantiationCompletionCallback
+        {
+            AsyncCallback (FilterGraph* myself, double inX, double inY)
+                : owner (myself), posX (inX), posY (inY)
+            {}
 
-        String errorMessage;
+            void completionCallback (AudioPluginInstance* instance, const String& error) override
+            {
+                owner->addFilterCallback (instance, error, posX, posY);
+            }
 
-        if (AudioPluginInstance* instance = formatManager.createPluginInstance (*desc, graph.getSampleRate(), graph.getBlockSize(), errorMessage))
-            node = graph.addNode (instance);
+            FilterGraph* owner;
+            double posX, posY;
+        };
+
+        formatManager.createPluginInstanceAsync (*desc, graph.getSampleRate(), graph.getBlockSize(),
+                                                 new AsyncCallback (this, x, y));
+    }
+}
+
+void FilterGraph::addFilterCallback (AudioPluginInstance* instance, const String& error, double x, double y)
+{
+    if (instance == nullptr)
+    {
+        AlertWindow::showMessageBox (AlertWindow::WarningIcon,
+                                     TRANS("Couldn't create filter"),
+                                     error);
+    }
+    else
+    {
+        instance->enableAllBuses();
+        AudioProcessorGraph::Node* node = graph.addNode (instance);
 
         if (node != nullptr)
         {
             node->properties.set ("x", x);
             node->properties.set ("y", y);
             changed();
-        }
-        else
-        {
-            AlertWindow::showMessageBox (AlertWindow::WarningIcon,
-                                         TRANS("Couldn't create filter"),
-                                         errorMessage);
         }
     }
 }
@@ -237,7 +260,7 @@ Result FilterGraph::saveDocument (const File& file)
 {
     ScopedPointer<XmlElement> xml (createXml());
 
-    if (! xml->writeToFile (file, String::empty))
+    if (! xml->writeToFile (file, String()))
         return Result::fail ("Couldn't write to the file");
 
     return Result::ok();
@@ -356,7 +379,7 @@ void FilterGraph::createNodeFromXml (const XmlElement& xml)
             {
                 jassert (node->getProcessor() != nullptr);
 
-                if (PluginWindow* const w = PluginWindow::getWindowFor (node, type))
+                if (PluginWindow* const w = PluginWindow::getWindowFor (node, type, graph))
                     w->toFront (true);
             }
         }
