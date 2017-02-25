@@ -13,6 +13,14 @@
 #include "../utility/juce_CheckSettingMacros.h"
 #include "../../juce_core/system/juce_TargetPlatform.h" // for JUCE_LINUX
 
+
+// silence warnings about unused variables (found on
+// https://stackoverflow.com/questions/1486904)
+#ifndef UNUSED
+#define UNUSED(x) (void)(x)
+#endif
+
+
 #if JucePlugin_Build_LV2
 
 /** Plugin requires processing with a fixed/constant block size */
@@ -1682,6 +1690,8 @@ public:
     uint32_t lv2GetOptions (LV2_Options_Option* options)
     {
         // currently unused
+        UNUSED(options);
+
         return LV2_OPTIONS_SUCCESS;
     }
 
@@ -1840,6 +1850,7 @@ public:
         info = curPosInfo;
         return true;
 #else
+        UNUSED(info);
         return false;
 #endif
     }
