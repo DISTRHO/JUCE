@@ -13,6 +13,7 @@
 #include "../utility/juce_CheckSettingMacros.h"
 #include "../../juce_core/system/juce_TargetPlatform.h" // for JUCE_LINUX
 
+
 #if JucePlugin_Build_LV2
 
 /** Plugin requires processing with a fixed/constant block size */
@@ -243,7 +244,7 @@ const String makeManifestFile (AudioProcessor* const filter, const String& binar
 }
 
 /** Create the -plugin-.ttl file contents */
-const String makePluginFile (AudioProcessor* const filter)
+const String makePluginFile (AudioProcessor* const filter, const int maxNumInputChannels, const int maxNumOutputChannels)
 {
     const String& pluginURI(getPluginURI());
     String text;
@@ -345,7 +346,7 @@ const String makePluginFile (AudioProcessor* const filter)
 #endif
 
     // Audio inputs
-    for (int i=0; i < JucePlugin_MaxNumInputChannels; ++i)
+    for (int i=0; i < maxNumInputChannels; ++i)
     {
         if (i == 0)
             text += "    lv2:port [\n";
@@ -357,14 +358,14 @@ const String makePluginFile (AudioProcessor* const filter)
         text += "        lv2:symbol \"lv2_audio_in_" + String(i+1) + "\" ;\n";
         text += "        lv2:name \"Audio Input " + String(i+1) + "\" ;\n";
 
-        if (i+1 == JucePlugin_MaxNumInputChannels)
+        if (i+1 == maxNumInputChannels)
             text += "    ] ;\n\n";
         else
             text += "    ] ,\n";
     }
 
     // Audio outputs
-    for (int i=0; i < JucePlugin_MaxNumOutputChannels; ++i)
+    for (int i=0; i < maxNumOutputChannels; ++i)
     {
         if (i == 0)
             text += "    lv2:port [\n";
@@ -376,7 +377,7 @@ const String makePluginFile (AudioProcessor* const filter)
         text += "        lv2:symbol \"lv2_audio_out_" + String(i+1) + "\" ;\n";
         text += "        lv2:name \"Audio Output " + String(i+1) + "\" ;\n";
 
-        if (i+1 == JucePlugin_MaxNumOutputChannels)
+        if (i+1 == maxNumOutputChannels)
             text += "    ] ;\n\n";
         else
             text += "    ] ,\n";
@@ -519,7 +520,7 @@ void createLv2Files(const char* basename)
 
     std::cout << "Writing " << binary << ".ttl..."; std::cout.flush();
     std::fstream plugin(binaryTTL.toUTF8(), std::ios::out);
-    plugin << makePluginFile(filter) << std::endl;
+    plugin << makePluginFile(filter, JucePlugin_MaxNumInputChannels, JucePlugin_MaxNumOutputChannels) << std::endl;
     plugin.close();
     std::cout << " done!" << std::endl;
 
@@ -1682,6 +1683,8 @@ public:
     uint32_t lv2GetOptions (LV2_Options_Option* options)
     {
         // currently unused
+        ignoreUnused(options);
+
         return LV2_OPTIONS_SUCCESS;
     }
 
@@ -1840,6 +1843,7 @@ public:
         info = curPosInfo;
         return true;
 #else
+        ignoreUnused(info);
         return false;
 #endif
     }
