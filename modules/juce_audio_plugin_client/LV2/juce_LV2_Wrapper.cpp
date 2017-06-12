@@ -915,6 +915,8 @@ public:
         }
         else
         {
+            parentContainer->setVisible (false);
+
             if (parentContainer != nullptr && parentContainer->isOnDesktop())
                 parentContainer->removeFromDesktop();
         }
