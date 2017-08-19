@@ -1247,6 +1247,11 @@ public:
     virtual void processorLayoutsChanged();
 
     //==============================================================================
+    /** LV2 specific calls, saving/restore as string. */
+    virtual String getStateInformationString () { return String::empty; }
+    virtual void setStateInformationString (const String&) {}
+
+    //==============================================================================
     /** Adds a listener that will be called when an aspect of this processor changes. */
     virtual void addListener (AudioProcessorListener* newListener);
 
