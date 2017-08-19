@@ -1234,6 +1234,11 @@ public:
         return 0;
     }
 
+    int getPID() const noexcept
+    {
+        return childPID;
+    }
+
     int childPID;
 
 private:
