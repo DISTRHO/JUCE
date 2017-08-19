@@ -79,13 +79,6 @@
 
 #include "../utility/juce_IncludeModuleHeaders.h"
 
-#if JUCE_LINUX && ! JUCE_AUDIOPROCESSOR_NO_GUI
-namespace juce
-{
-  extern Display* display;
-}
-#endif
-
 #define JUCE_LV2_STATE_STRING_URI "urn:juce:stateString"
 #define JUCE_LV2_STATE_BINARY_URI "urn:juce:stateBinary"
 
@@ -765,7 +758,7 @@ public:
         const int ch = child->getHeight();
 
 #if JUCE_LINUX
-        XResizeWindow (display, (Window) getWindowHandle(), cw, ch);
+        XResizeWindow (display.display, (Window) getWindowHandle(), cw, ch);
 #else
         setSize (cw, ch);
 #endif
@@ -785,6 +778,9 @@ public:
 private:
     //==============================================================================
     const LV2UI_Resize* uiResize;
+#if JUCE_LINUX
+    ScopedXDisplay display;
+#endif
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JuceLv2ParentContainer);
 };
@@ -1041,6 +1037,10 @@ private:
     ScopedPointer<JuceLv2ParentContainer> parentContainer;
     const LV2UI_Resize* uiResize;
 
+#if JUCE_LINUX
+    ScopedXDisplay display;
+#endif
+
     //==============================================================================
     void resetExternalUI (const LV2_Feature* const* features)
     {
@@ -1099,7 +1099,7 @@ private:
 #if JUCE_LINUX
             Window hostWindow = (Window) parent;
             Window editorWnd  = (Window) parentContainer->getWindowHandle();
-            XReparentWindow (display, editorWnd, hostWindow, 0, 0);
+            XReparentWindow (display.display, editorWnd, hostWindow, 0, 0);
 #endif
 
             parentContainer->reset (uiResize);
