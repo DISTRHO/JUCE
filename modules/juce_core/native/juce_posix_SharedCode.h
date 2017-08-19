@@ -1160,7 +1160,18 @@ public:
 
         if (pipe (pipeHandles) == 0)
         {
+              Array<char*> argv;
+              for (int i = 0; i < arguments.size(); ++i)
+                  if (arguments[i].isNotEmpty())
+                      argv.add (const_cast<char*> (arguments[i].toRawUTF8()));
+
+              argv.add (nullptr);
+
+#if JUCE_USE_VFORK
+            const pid_t result = vfork();
+#else
             const pid_t result = fork();
+#endif
 
             if (result < 0)
             {
@@ -1169,6 +1180,7 @@ public:
             }
             else if (result == 0)
             {
+#if ! JUCE_USE_VFORK
                 // we're the child process..
                 close (pipeHandles[0]);   // close the read handle
 
@@ -1183,16 +1195,10 @@ public:
                     dup2 (open ("/dev/null", O_WRONLY), STDERR_FILENO);
 
                 close (pipeHandles[1]);
+#endif
 
-                Array<char*> argv;
-                for (int i = 0; i < arguments.size(); ++i)
-                    if (arguments[i].isNotEmpty())
-                        argv.add (const_cast<char*> (arguments[i].toRawUTF8()));
-
-                argv.add (nullptr);
-
-                execvp (exe.toRawUTF8(), argv.getRawDataPointer());
-                exit (-1);
+                if (execvp (argv[0], argv.getRawDataPointer()) < 0)
+                    _exit (-1);
             }
             else
             {
