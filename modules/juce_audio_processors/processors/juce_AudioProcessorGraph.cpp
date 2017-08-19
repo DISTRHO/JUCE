@@ -1646,8 +1646,10 @@ bool AudioProcessorGraph::AudioGraphIOProcessor::producesMidi() const
 bool AudioProcessorGraph::AudioGraphIOProcessor::isInput() const noexcept           { return type == audioInputNode  || type == midiInputNode; }
 bool AudioProcessorGraph::AudioGraphIOProcessor::isOutput() const noexcept          { return type == audioOutputNode || type == midiOutputNode; }
 
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
 bool AudioProcessorGraph::AudioGraphIOProcessor::hasEditor() const                  { return false; }
 AudioProcessorEditor* AudioProcessorGraph::AudioGraphIOProcessor::createEditor()    { return nullptr; }
+#endif
 
 int AudioProcessorGraph::AudioGraphIOProcessor::getNumPrograms()                    { return 0; }
 int AudioProcessorGraph::AudioGraphIOProcessor::getCurrentProgram()                 { return 0; }

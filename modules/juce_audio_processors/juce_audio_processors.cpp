@@ -47,7 +47,7 @@
  #endif
 #endif
 
-#if JUCE_PLUGINHOST_VST && JUCE_LINUX
+#if JUCE_PLUGINHOST_VST && JUCE_LINUX && ! JUCE_AUDIOPROCESSOR_NO_GUI
  #include <X11/Xlib.h>
  #include <X11/Xutil.h>
  #undef KeyPress
@@ -160,9 +160,11 @@ void AutoResizingNSViewComponentWithParent::timerCallback() override
 #include "format/juce_AudioPluginFormat.cpp"
 #include "format/juce_AudioPluginFormatManager.cpp"
 #include "processors/juce_AudioProcessor.cpp"
-#include "processors/juce_AudioProcessorEditor.cpp"
 #include "processors/juce_AudioProcessorGraph.cpp"
-#include "processors/juce_GenericAudioProcessorEditor.cpp"
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
+ #include "processors/juce_AudioProcessorEditor.cpp"
+ #include "processors/juce_GenericAudioProcessorEditor.cpp"
+#endif
 #include "processors/juce_PluginDescription.cpp"
 #include "format_types/juce_LADSPAPluginFormat.cpp"
 #include "format_types/juce_VSTPluginFormat.cpp"

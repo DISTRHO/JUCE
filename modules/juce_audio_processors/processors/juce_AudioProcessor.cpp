@@ -76,9 +76,11 @@ void AudioProcessor::initialise (const BusesProperties& ioConfig)
 
 AudioProcessor::~AudioProcessor()
 {
+   #if ! JUCE_AUDIOPROCESSOR_NO_GUI
     // ooh, nasty - the editor should have been deleted before the filter
     // that it refers to is deleted..
     jassert (activeEditor == nullptr);
+   #endif
 
    #if JUCE_DEBUG && ! JUCE_DISABLE_AUDIOPROCESSOR_BEGIN_END_GESTURE_CHECKING
     // This will fail if you've called beginParameterChangeGesture() for one
@@ -983,6 +985,7 @@ void AudioProcessor::audioIOChanged (bool busNumberChanged, bool channelNumChang
     processorLayoutsChanged();
 }
 
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
 //==============================================================================
 void AudioProcessor::editorBeingDeleted (AudioProcessorEditor* const editor) noexcept
 {
@@ -1013,6 +1016,7 @@ AudioProcessorEditor* AudioProcessor::createEditorIfNeeded()
 
     return ed;
 }
+#endif
 
 //==============================================================================
 void AudioProcessor::getCurrentProgramStateInformation (juce::MemoryBlock& destData)
