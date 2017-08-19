@@ -647,12 +647,39 @@ File juce_getExecutableFile()
 
             void* localSymbol = (void*) juce_getExecutableFile;
             dladdr (localSymbol, &exeInfo);
-            return CharPointer_UTF8 (exeInfo.dli_fname);
+
+            const CharPointer_UTF8 filename (exeInfo.dli_fname);
+
+            // if the filename is absolute simply return it
+            if (File::isAbsolutePath (filename))
+                return filename;
+
+            // if the filename is relative construct from CWD
+            if (filename[0] == '.')
+                return File::getCurrentWorkingDirectory().getChildFile (filename).getFullPathName();
+
+            // filename is abstract, look up in PATH
+            if (const char* const envpath = ::getenv ("PATH"))
+            {
+                StringArray paths (StringArray::fromTokens (envpath, ":", ""));
+
+                for (int i=paths.size(); --i>=0;)
+                {
+                    const File filepath (File (paths[i]).getChildFile (filename));
+
+                    if (filepath.existsAsFile())
+                        return filepath.getFullPathName();
+                }
+            }
+
+            // if we reach this, we failed to find ourselves...
+            jassertfalse;
+            return filename;
         }
     };
 
     static String filename = DLAddrReader::getFilename();
-    return File::getCurrentWorkingDirectory().getChildFile (filename);
+    return filename;
    #endif
 }
 
