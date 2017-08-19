@@ -28,7 +28,7 @@
 
 } // (juce namespace)
 
-#include <ladspa.h>
+#include "ladspa.h"
 
 namespace juce
 {
