@@ -2970,8 +2970,9 @@ private:
     {
         Atom netHints [2];
 
-        if ((styleFlags & windowIsTemporary) != 0
-             || ((styleFlags & windowHasDropShadow) == 0 && Desktop::canUseSemiTransparentWindows()))
+        if (styleFlags & windowIsTemporary)
+            netHints [0] = Atoms::getIfExists ("_NET_WM_WINDOW_TYPE_TOOLTIP");
+        else if ((styleFlags & windowHasDropShadow) == 0 && Desktop::canUseSemiTransparentWindows()))
             netHints [0] = Atoms::getIfExists (display, "_NET_WM_WINDOW_TYPE_COMBO");
         else
             netHints [0] = Atoms::getIfExists (display, "_NET_WM_WINDOW_TYPE_NORMAL");
