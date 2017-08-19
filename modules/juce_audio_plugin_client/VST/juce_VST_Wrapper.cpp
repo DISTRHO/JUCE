@@ -60,6 +60,7 @@
 #endif
 
 #include "../../juce_audio_processors/format_types/juce_VSTInterface.h"
+#include "../../juce_audio_processors/format_types/juce_VSTMidiEventList.h"
 
 #ifdef _MSC_VER
  #pragma warning (pop)
@@ -179,9 +180,9 @@ struct SharedMessageThread  : public Thread
     void run() override
     {
         initialiseJuce_GUI();
-        initialised = true;
 
         MessageManager::getInstance()->setCurrentThreadAsMessageThread();
+        initialised = true;
 
         ScopedXDisplay xDisplay;
 
@@ -267,9 +268,6 @@ public:
 
         // You must at least have some channels
         jassert (processor->isMidiEffect() || (maxNumInChannels > 0 || maxNumOutChannels > 0));
-
-        if (processor->isMidiEffect())
-            maxNumInChannels = maxNumOutChannels = 2;
 
        #ifdef JucePlugin_PreferredChannelConfigurations
         processor->setPlayConfigDetails (maxNumInChannels, maxNumOutChannels, 44100.0, 1024);
@@ -1887,7 +1885,7 @@ private:
 
     pointer_sized_int handleGetPlugInName (VstOpCodeArguments args)
     {
-        String (JucePlugin_Name).copyToUTF8 ((char*) args.ptr, 64 + 1);
+        String (processor->getName()).copyToUTF8 ((char*) args.ptr, 64 + 1);
         return 1;
     }
 
