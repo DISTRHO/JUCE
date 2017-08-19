@@ -63,6 +63,7 @@ namespace juce
 #include "buffers/juce_AudioChannelSet.h"
 #include "effects/juce_Decibels.h"
 #include "effects/juce_IIRFilter.h"
+#include "effects/juce_IIRFilterOld.h"
 #include "effects/juce_LagrangeInterpolator.h"
 #include "effects/juce_CatmullRomInterpolator.h"
 #include "effects/juce_LinearSmoothedValue.h"
