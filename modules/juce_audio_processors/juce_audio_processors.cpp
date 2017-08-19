@@ -86,24 +86,9 @@ static inline bool arrayContainsPlugin (const OwnedArray<PluginDescription>& lis
 struct AutoResizingNSViewComponent  : public ViewComponentBaseClass,
                                       private AsyncUpdater
 {
-    AutoResizingNSViewComponent() : recursive (false) {}
-
-    void childBoundsChanged (Component*) override
-    {
-        if (recursive)
-        {
-            triggerAsyncUpdate();
-        }
-        else
-        {
-            recursive = true;
-            resizeToFitView();
-            recursive = true;
-        }
-    }
-
-    void handleAsyncUpdate() override               { resizeToFitView(); }
-
+    AutoResizingNSViewComponent();
+    void childBoundsChanged (Component*) override;
+    void handleAsyncUpdate() override;
     bool recursive;
 };
 
@@ -111,33 +96,61 @@ struct AutoResizingNSViewComponent  : public ViewComponentBaseClass,
 struct AutoResizingNSViewComponentWithParent  : public AutoResizingNSViewComponent,
                                                 private Timer
 {
-    AutoResizingNSViewComponentWithParent()
-    {
-        JUCE_IOS_MAC_VIEW* v = [[JUCE_IOS_MAC_VIEW alloc] init];
-        setView (v);
-        [v release];
-
-        startTimer (30);
-    }
-
-    JUCE_IOS_MAC_VIEW* getChildView() const
-    {
-        if (JUCE_IOS_MAC_VIEW* parent = (JUCE_IOS_MAC_VIEW*) getView())
-            if ([[parent subviews] count] > 0)
-                return [[parent subviews] objectAtIndex: 0];
-
-        return nil;
-    }
-
-    void timerCallback() override
-    {
-        if (JUCE_IOS_MAC_VIEW* child = getChildView())
-        {
-            stopTimer();
-            setView (child);
-        }
-    }
+    AutoResizingNSViewComponentWithParent();
+    JUCE_IOS_MAC_VIEW* getChildView() const;
+    void timerCallback() override;
 };
+
+//==============================================================================
+AutoResizingNSViewComponent::AutoResizingNSViewComponent()
+    : recursive (false) {}
+
+void AutoResizingNSViewComponent::childBoundsChanged (Component*) override
+{
+    if (recursive)
+    {
+        triggerAsyncUpdate();
+    }
+    else
+    {
+        recursive = true;
+        resizeToFitView();
+        recursive = true;
+    }
+}
+
+void AutoResizingNSViewComponent::handleAsyncUpdate() override
+{
+    resizeToFitView();
+}
+
+//==============================================================================
+AutoResizingNSViewComponentWithParent::AutoResizingNSViewComponentWithParent()
+{
+    JUCE_IOS_MAC_VIEW* v = [[JUCE_IOS_MAC_VIEW alloc] init];
+    setView (v);
+    [v release];
+
+    startTimer (30);
+}
+
+JUCE_IOS_MAC_VIEW* AutoResizingNSViewComponentWithParent::getChildView() const
+{
+    if (JUCE_IOS_MAC_VIEW* parent = (JUCE_IOS_MAC_VIEW*) getView())
+        if ([[parent subviews] count] > 0)
+            return [[parent subviews] objectAtIndex: 0];
+
+    return nil;
+}
+
+void AutoResizingNSViewComponentWithParent::timerCallback() override
+{
+    if (JUCE_IOS_MAC_VIEW* child = getChildView())
+    {
+        stopTimer();
+        setView (child);
+    }
+}
 #endif
 
 #if JUCE_CLANG
