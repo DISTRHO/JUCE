@@ -86,6 +86,9 @@
  #include <public.sdk/source/common/memorystream.h>
  #include <public.sdk/source/vst/vsteditcontroller.h>
 #else
+ #if JUCE_MINGW
+  #define _set_abort_behavior(...)
+ #endif
  #include <base/source/baseiids.cpp>
  #include <base/source/fbuffer.cpp>
  #include <base/source/fdebug.cpp>
