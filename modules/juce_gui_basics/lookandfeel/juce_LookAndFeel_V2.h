@@ -182,6 +182,8 @@ public:
 
     bool shouldPopupMenuScaleWithTargetComponent (const PopupMenu::Options& options) override;
 
+    int getPopupMenuBorderSize() override;
+
     //==============================================================================
     void drawComboBox (Graphics&, int width, int height, bool isButtonDown,
                        int buttonX, int buttonY, int buttonW, int buttonH,
@@ -289,9 +291,9 @@ public:
     //==============================================================================
     void drawTableHeaderBackground (Graphics&, TableHeaderComponent&) override;
 
-    void drawTableHeaderColumn (Graphics&, const String& columnName, int columnId,
-                                int width, int height, bool isMouseOver, bool isMouseDown,
-                                int columnFlags) override;
+    void drawTableHeaderColumn (Graphics&, TableHeaderComponent&, const String& columnName,
+                                int columnId, int width, int height, bool isMouseOver,
+                                bool isMouseDown, int columnFlags) override;
 
     //==============================================================================
     void paintToolbarBackground (Graphics&, int width, int height, Toolbar&) override;
