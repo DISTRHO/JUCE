@@ -20,6 +20,10 @@
   ==============================================================================
 */
 
+namespace juce
+{
+namespace BlocksProtocol
+{
 
 /** This value is incremented when the format of the API changes in a way which
     breaks compatibility.
@@ -210,6 +214,7 @@ enum ConfigItemId
     fixedVelocityValue  = 16,
     pianoMode           = 17,
     glideLock           = 18,
+    glideLockEnable     = 19,
     // Live
     mode                = 20,
     volume              = 21,
@@ -222,6 +227,8 @@ enum ConfigItemId
     xTrackingMode       = 30,
     yTrackingMode       = 31,
     zTrackingMode       = 32,
+    // Graphics
+    gammaCorrection     = 33,
     // User
     user0               = 64,
     user1               = 65,
@@ -415,10 +422,10 @@ static constexpr const char* ledProgramLittleFootFunctions[] =
     "mod/iii",
     "getRandomFloat/f",
     "getRandomInt/ii",
-    "getMillisecondCounter/i",
-    "getFirmwareVersion/i",
     "log/vi",
     "logHex/vi",
+    "getMillisecondCounter/i",
+    "getFirmwareVersion/i",
     "getTimeInCurrentFunctionCall/i",
     "getBatteryLevel/f",
     "isBatteryCharging/b",
@@ -470,6 +477,9 @@ static constexpr const char* ledProgramLittleFootFunctions[] =
     "sendPitchBend/vii",
     "sendPitchBend/viii",
     "sendChannelPressure/vii",
+    "addPitchCorrectionPad/viiffff",
+    "setPitchCorrectionEnabled/vb",
+    "getPitchCorrectionPitchBend/iii",
     "setChannelRange/vbii",
     "assignChannel/ii",
     "deassignChannel/vii",
@@ -489,5 +499,13 @@ static constexpr const char* ledProgramLittleFootFunctions[] =
     "onControlPress/vi",
     "onControlRelease/vi",
     "initControl/viiiiiiiii",
+    "setButtonMode/vii",
+    "setButtonType/viii",
+    "setButtonMinMaxDefault/viiii",
+    "setButtonColours/viii",
+    "setButtonTriState/vii",
     nullptr
 };
+
+} // namespace BlocksProtocol
+} // namespace juce

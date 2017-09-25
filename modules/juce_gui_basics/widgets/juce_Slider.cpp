@@ -24,7 +24,11 @@
   ==============================================================================
 */
 
-class Slider::Pimpl   : private AsyncUpdater,
+namespace juce
+{
+
+class Slider::Pimpl   : public AsyncUpdater, // this needs to be public otherwise it will cause an
+                                             // error when JUCE_DLL_BUILD=1
                         private Button::Listener,
                         private Label::Listener,
                         private Value::Listener
@@ -953,7 +957,7 @@ public:
              && style != TwoValueHorizontal
              && style != TwoValueVertical)
         {
-            if (owner.isMouseOver (true) && owner.getTopLevelComponent()->hasKeyboardFocus (true))
+            if (owner.isMouseOver (true))
             {
                 if (popupDisplay == nullptr)
                     showPopupDisplay();
@@ -1621,3 +1625,5 @@ void Slider::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& wheel
     if (! (isEnabled() && pimpl->mouseWheelMove (e, wheel)))
         Component::mouseWheelMove (e, wheel);
 }
+
+} // namespace juce

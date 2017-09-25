@@ -20,7 +20,9 @@
   ==============================================================================
 */
 
-//==============================================================================
+namespace juce
+{
+
 #define JNI_CLASS_MEMBERS(METHOD, STATICMETHOD, FIELD, STATICFIELD) \
  STATICMETHOD (getMinBufferSize,            "getMinBufferSize",             "(III)I") \
  STATICMETHOD (getNativeOutputSampleRate,   "getNativeOutputSampleRate",    "(I)I") \
@@ -31,6 +33,7 @@
  METHOD (release,       "release",  "()V") \
  METHOD (flush,         "flush",    "()V") \
  METHOD (write,         "write",    "([SII)I") \
+ METHOD (getUnderrunCount, "getUnderrunCount", "()I") \
 
 DECLARE_JNI_CLASS (AudioTrack, "android/media/AudioTrack");
 #undef JNI_CLASS_MEMBERS
@@ -279,6 +282,14 @@ public:
     String getLastError() override                       { return lastError; }
     bool isPlaying() override                            { return isRunning && callback != 0; }
 
+    int getXRunCount() const noexcept override
+    {
+        if (outputDevice != nullptr)
+            return getEnv()->CallIntMethod (outputDevice, AudioTrack.getUnderrunCount);
+
+        return -1;
+    }
+
     void start (AudioIODeviceCallback* newCallback) override
     {
         if (isRunning && callback != newCallback)
@@ -472,3 +483,5 @@ AudioIODeviceType* AudioIODeviceType::createAudioIODeviceType_Android()
 
     return new AndroidAudioIODeviceType();
 }
+
+} // namespace juce

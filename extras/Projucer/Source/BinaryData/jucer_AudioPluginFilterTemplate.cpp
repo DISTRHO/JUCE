@@ -54,9 +54,9 @@ bool FILTERCLASSNAME::producesMidi() const
    #endif
 }
 
-bool FILTERCLASSNAME::isMidiEffect () const
+bool FILTERCLASSNAME::isMidiEffect() const
 {
-   #ifdef JucePlugin_IsMidiEffect
+   #if JucePlugin_IsMidiEffect
     return true;
    #else
     return false;
@@ -131,6 +131,7 @@ bool FILTERCLASSNAME::isBusesLayoutSupported (const BusesLayout& layouts) const
 
 void FILTERCLASSNAME::processBlock (AudioSampleBuffer& buffer, MidiBuffer& midiMessages)
 {
+    ScopedNoDenormals noDenormals;
     const int totalNumInputChannels  = getTotalNumInputChannels();
     const int totalNumOutputChannels = getTotalNumOutputChannels();
 
