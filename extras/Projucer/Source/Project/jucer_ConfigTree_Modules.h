@@ -24,12 +24,20 @@
   ==============================================================================
 */
 
-class ModuleItem   : public ConfigTreeItemBase
+class ModuleItem   : public ConfigTreeItemBase,
+                     private Value::Listener
 {
 public:
     ModuleItem (Project& p, const String& modID)
         : project (p), moduleID (modID)
     {
+        missingDependencies = project.getModules().getExtraDependenciesNeeded (moduleID).size() > 0;
+        cppStandardHigherThanProject = project.getModules().doesModuleHaveHigherCppStandardThanProject (moduleID);
+
+        projectCppStandardValue.referTo (project.getCppStandardValue());
+        projectCppStandardValue.addListener (this);
+
+        moduleInfo = project.getModules().getModuleInfo (moduleID);
     }
 
     bool canBeSelected() const override       { return true; }
@@ -38,8 +46,8 @@ public:
     String getDisplayName() const override    { return moduleID; }
     String getRenamingName() const override   { return getDisplayName(); }
     void setName (const String&) override     {}
-    bool isMissing() const override           { return hasMissingDependencies(); }
-    bool hasWarnings() const override         { return hasHigherCppStandardThanProject(); }
+    bool isMissing() const override           { return missingDependencies; }
+    bool hasWarnings() const override         { return cppStandardHigherThanProject; }
 
     void showDocument() override
     {
@@ -59,12 +67,11 @@ public:
 
         if (! isSelected())
         {
-            auto info = project.getModules().getModuleInfo (moduleID);
-            if (info.isValid() && info.getVendor() == "juce")
+            if (moduleInfo.isValid() && moduleInfo.getVendor() == "juce")
             {
-                if (info.getLicense() == "ISC")
+                if (moduleInfo.getLicense() == "ISC")
                     iconColour = Colours::lightblue;
-                else if (info.getLicense() == "GPL/Commercial")
+                else if (moduleInfo.getLicense() == "GPL/Commercial")
                     iconColour = Colours::orange;
             }
         }
@@ -89,14 +96,28 @@ public:
     String moduleID;
 
 private:
-    bool hasMissingDependencies() const
-    {
-        return project.getModules().getExtraDependenciesNeeded (moduleID).size() > 0;
-    }
+    ModuleDescription moduleInfo;
+    bool missingDependencies = false;
+    bool cppStandardHigherThanProject = false;
+    Value projectCppStandardValue;
 
-    bool hasHigherCppStandardThanProject() const
+    //==============================================================================
+    void valueChanged (Value& v) override
     {
-        return project.getModules().doesModuleHaveHigherCppStandardThanProject (moduleID);
+        if (v == projectCppStandardValue)
+        {
+            auto oldVal = cppStandardHigherThanProject;
+            cppStandardHigherThanProject = project.getModules().doesModuleHaveHigherCppStandardThanProject (moduleID);
+
+            if (oldVal != cppStandardHigherThanProject)
+            {
+                if (auto* parent = dynamic_cast<EnabledModulesItem*> (getParentItem()))
+                {
+                    parent->refreshSubItems();
+                    return;
+                }
+            }
+        }
     }
 
     //==============================================================================
@@ -244,8 +265,8 @@ private:
                 }
             }
 
-            if (auto* moduleInfo = dynamic_cast<ModuleInfoComponent*> (group.properties.getUnchecked (0)))
-                moduleInfo->refresh();
+            if (auto* infoComponent = dynamic_cast<ModuleInfoComponent*> (group.properties.getUnchecked (0)))
+                infoComponent->refresh();
         }
 
         //==============================================================================
