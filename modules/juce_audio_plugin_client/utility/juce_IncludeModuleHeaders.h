@@ -24,6 +24,8 @@
   ==============================================================================
 */
 
+#pragma once
+
 #include "../juce_audio_plugin_client.h"
 
 namespace juce
