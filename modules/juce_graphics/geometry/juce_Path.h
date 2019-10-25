@@ -59,8 +59,10 @@ namespace juce
     be open or closed.
 
     @see PathFlatteningIterator, PathStrokeType, Graphics
+
+    @tags{Graphics}
 */
-class JUCE_API  Path
+class JUCE_API  Path  final
 {
 public:
     //==============================================================================
@@ -753,7 +755,7 @@ public:
         //==============================================================================
     private:
         const Path& path;
-        size_t index = 0;
+        const float* index;
 
         JUCE_DECLARE_NON_COPYABLE (Iterator)
     };
@@ -781,9 +783,7 @@ public:
     void loadPathFromData (const void* data, size_t numberOfBytes);
 
     /** Stores the path by writing it out to a stream.
-
         After writing out a path, you can reload it using loadPathFromStream().
-
         @see loadPathFromStream, loadPathFromData
     */
     void writePathToStream (OutputStream& destination) const;
@@ -803,8 +803,9 @@ private:
     //==============================================================================
     friend class PathFlatteningIterator;
     friend class Path::Iterator;
-    ArrayAllocationBase<float, DummyCriticalSection> data;
-    size_t numElements = 0;
+    friend class EdgeTable;
+
+    Array<float> data;
 
     struct PathBounds
     {
@@ -813,7 +814,13 @@ private:
         void reset() noexcept;
         void reset (float, float) noexcept;
         void extend (float, float) noexcept;
-        void extend (float, float, float, float) noexcept;
+
+        template <typename... Coords>
+        void extend (float x, float y, Coords... coords) noexcept
+        {
+            extend (x, y);
+            extend (coords...);
+        }
 
         float pathXMin = 0, pathXMax = 0, pathYMin = 0, pathYMax = 0;
     };

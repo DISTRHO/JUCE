@@ -28,6 +28,8 @@ namespace juce
 /** This is an internal helper class which converts a juce ElementComparator style
     class (using a "compareElements" method) into a class that's compatible with
     std::sort (i.e. using an operator() to compare the elements)
+
+    @tags{Core}
 */
 template <typename ElementComparator>
 struct SortFunctionConverter
@@ -39,7 +41,7 @@ struct SortFunctionConverter
 
 private:
     ElementComparator& comparator;
-    SortFunctionConverter& operator= (const SortFunctionConverter&) JUCE_DELETED_FUNCTION;
+    SortFunctionConverter& operator= (const SortFunctionConverter&) = delete;
 };
 
 #endif
@@ -165,12 +167,14 @@ static int findInsertIndexInSortedArray (ElementComparator& comparator,
     This will work for primitive types and objects that implement operator<().
 
     Example: @code
-    Array <int> myArray;
+    Array<int> myArray;
     DefaultElementComparator<int> sorter;
     myArray.sort (sorter);
     @endcode
 
     @see ElementComparator
+
+    @tags{Core}
 */
 template <class ElementType>
 class DefaultElementComparator

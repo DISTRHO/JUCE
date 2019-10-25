@@ -40,6 +40,8 @@ class ThreadPoolThread;
     true, the runJob() method must return immediately.
 
     @see ThreadPool, Thread
+
+    @tags{Core}
 */
 class JUCE_API  ThreadPoolJob
 {
@@ -113,6 +115,16 @@ public:
     */
     void signalJobShouldExit();
 
+    /** Add a listener to this thread job which will receive a callback when
+        signalJobShouldExit was called on this thread job.
+
+        @see signalJobShouldExit, removeListener
+    */
+    void addListener (Thread::Listener*);
+
+    /** Removes a listener added with addListener. */
+    void removeListener (Thread::Listener*);
+
     //==============================================================================
     /** If the calling thread is being invoked inside a runJob() method, this will
         return the ThreadPoolJob that it belongs to.
@@ -126,6 +138,7 @@ private:
     String jobName;
     ThreadPool* pool = nullptr;
     bool shouldStop = false, isActive = false, shouldBeDeleted = false;
+    ListenerList<Thread::Listener, Array<Thread::Listener*, CriticalSection>> listeners;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ThreadPoolJob)
 };
@@ -139,6 +152,8 @@ private:
     will be called by the next pooled thread that becomes free.
 
     @see ThreadPoolJob, Thread
+
+    @tags{Core}
 */
 class JUCE_API  ThreadPool
 {

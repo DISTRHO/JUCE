@@ -35,6 +35,8 @@ namespace juce
     fonts and colours.
 
     @see TextEditor::Listener, Label
+
+    @tags{GUI}
 */
 class JUCE_API  TextEditor  : public Component,
                               public TextInputTarget,
@@ -317,6 +319,19 @@ public:
         @see addListener
     */
     void removeListener (Listener* listenerToRemove);
+
+    //==============================================================================
+    /** You can assign a lambda to this callback object to have it called when the text is changed. */
+    std::function<void()> onTextChange;
+
+    /** You can assign a lambda to this callback object to have it called when the return key is pressed. */
+    std::function<void()> onReturnKey;
+
+    /** You can assign a lambda to this callback object to have it called when the escape key is pressed. */
+    std::function<void()> onEscapeKey;
+
+    /** You can assign a lambda to this callback object to have it called when the editor loses key focus. */
+    std::function<void()> onFocusLost;
 
     //==============================================================================
     /** Returns the entire contents of the editor. */
@@ -659,7 +674,7 @@ public:
     /** @internal */
     bool isTextInputActive() const override;
     /** @internal */
-    void setTemporaryUnderlining (const Array<Range<int> >&) override;
+    void setTemporaryUnderlining (const Array<Range<int>>&) override;
     /** @internal */
     VirtualKeyboardType getKeyboardType() override    { return keyboardType; }
 
@@ -749,6 +764,7 @@ private:
     void reinsert (int insertIndex, const OwnedArray<UniformTextSection>&);
     void remove (Range<int>, UndoManager*, int caretPositionToMoveTo);
     void getCharPosition (int index, Point<float>&, float& lineHeight) const;
+    Rectangle<float> getCaretRectangleFloat() const;
     void updateCaretPosition();
     void updateValueFromText();
     void textWasChangedByValue();
@@ -769,7 +785,5 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TextEditor)
 };
 
-/** This typedef is just for compatibility with old code - newer code should use the TextEditor::Listener class directly. */
-typedef TextEditor::Listener TextEditorListener;
 
 } // namespace juce

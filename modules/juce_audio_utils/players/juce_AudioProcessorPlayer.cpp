@@ -44,7 +44,7 @@ void AudioProcessorPlayer::setProcessor (AudioProcessor* const processorToPlay)
     {
         if (processorToPlay != nullptr && sampleRate > 0 && blockSize > 0)
         {
-            processorToPlay->setPlayConfigDetails(numInputChans, numOutputChans, sampleRate, blockSize);
+            processorToPlay->setPlayConfigDetails (numInputChans, numOutputChans, sampleRate, blockSize);
 
             bool supportsDouble = processorToPlay->supportsDoublePrecisionProcessing() && isDoublePrecision;
 
@@ -141,7 +141,7 @@ void AudioProcessorPlayer::audioDeviceIOCallback (const float** const inputChann
         }
     }
 
-    AudioSampleBuffer buffer (channels, totalNumChans, numSamples);
+    AudioBuffer<float> buffer (channels, totalNumChans, numSamples);
 
     {
         const ScopedLock sl (lock);
@@ -187,7 +187,7 @@ void AudioProcessorPlayer::audioDeviceAboutToStart (AudioIODevice* const device)
     numOutputChans = numChansOut;
 
     messageCollector.reset (sampleRate);
-    channels.calloc ((size_t) jmax (numChansIn, numChansOut) + 2);
+    channels.calloc (jmax (numChansIn, numChansOut) + 2);
 
     if (processor != nullptr)
     {

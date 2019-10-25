@@ -32,6 +32,8 @@ namespace juce
     apply the reverb to your audio data.
 
     @see ReverbAudioSource
+
+    @tags{Audio}
 */
 class Reverb
 {
@@ -229,7 +231,7 @@ private:
             if (size != bufferSize)
             {
                 bufferIndex = 0;
-                buffer.malloc ((size_t) size);
+                buffer.malloc (size);
                 bufferSize = size;
             }
 
@@ -274,7 +276,7 @@ private:
             if (size != bufferSize)
             {
                 bufferIndex = 0;
-                buffer.malloc ((size_t) size);
+                buffer.malloc (size);
                 bufferSize = size;
             }
 

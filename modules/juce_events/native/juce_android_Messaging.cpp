@@ -34,7 +34,7 @@ DECLARE_JNI_CLASS (JNIHandler, "android/os/Handler");
 //==============================================================================
 namespace Android
 {
-    class Runnable : public juce::AndroidInterfaceImplementer
+    class Runnable  : public juce::AndroidInterfaceImplementer
     {
     public:
         virtual void run() = 0;
@@ -43,7 +43,7 @@ namespace Android
         jobject invoke (jobject proxy, jobject method, jobjectArray args) override
         {
             auto* env = getEnv();
-            auto methodName = juce::juceString ((jstring) env->CallObjectMethod (method, Method.getName));
+            auto methodName = juce::juceString ((jstring) env->CallObjectMethod (method, JavaMethod.getName));
 
             if (methodName == "run")
             {
@@ -58,25 +58,73 @@ namespace Android
 
     struct Handler
     {
-        juce_DeclareSingleton (Handler, false)
-
         Handler() : nativeHandler (getEnv()->NewObject (JNIHandler, JNIHandler.constructor)) {}
+        ~Handler() { clearSingletonInstance(); }
 
-        bool post (Runnable* runnable)
+        JUCE_DECLARE_SINGLETON (Handler, false)
+
+        bool post (jobject runnable)
         {
-            return (getEnv()->CallBooleanMethod (nativeHandler.get(), JNIHandler.post,
-                                                 CreateJavaInterface (runnable, "java/lang/Runnable").get()) != 0);
+            return (getEnv()->CallBooleanMethod (nativeHandler.get(), JNIHandler.post, runnable) != 0);
         }
 
         GlobalRef nativeHandler;
     };
 
-    juce_ImplementSingleton (Handler);
+    JUCE_IMPLEMENT_SINGLETON (Handler)
 }
 
 //==============================================================================
-void MessageManager::doPlatformSpecificInitialisation() { Android::Handler::getInstance(); }
-void MessageManager::doPlatformSpecificShutdown()       {}
+struct AndroidMessageQueue     : private Android::Runnable
+{
+    JUCE_DECLARE_SINGLETON_SINGLETHREADED (AndroidMessageQueue, true)
+
+    AndroidMessageQueue()
+        : self (CreateJavaInterface (this, "java/lang/Runnable").get())
+    {
+    }
+
+    ~AndroidMessageQueue()
+    {
+        jassert (MessageManager::getInstance()->isThisTheMessageThread());
+        clearSingletonInstance();
+    }
+
+    bool post (MessageManager::MessageBase::Ptr&& message)
+    {
+        queue.add (static_cast<MessageManager::MessageBase::Ptr&& > (message));
+
+        // this will call us on the message thread
+        return handler.post (self.get());
+    }
+
+private:
+
+    void run() override
+    {
+        while (true)
+        {
+            MessageManager::MessageBase::Ptr message (queue.removeAndReturn (0));
+
+            if (message == nullptr)
+                break;
+
+            message->messageCallback();
+        }
+    }
+
+    // the this pointer to this class in Java land
+    GlobalRef self;
+
+    ReferenceCountedArray<MessageManager::MessageBase, CriticalSection> queue;
+    Android::Handler handler;
+};
+
+JUCE_IMPLEMENT_SINGLETON (AndroidMessageQueue)
+
+//==============================================================================
+void MessageManager::doPlatformSpecificInitialisation() { AndroidMessageQueue::getInstance(); }
+void MessageManager::doPlatformSpecificShutdown()       { AndroidMessageQueue::deleteInstance(); }
 
 //==============================================================================
 bool MessageManager::dispatchNextMessageOnSystemQueue (const bool)
@@ -87,37 +135,9 @@ bool MessageManager::dispatchNextMessageOnSystemQueue (const bool)
     return true;
 }
 
-//==============================================================================
-struct AndroidMessageCallback : public Android::Runnable
-{
-    AndroidMessageCallback (const MessageManager::MessageBase::Ptr& messageToDeliver)
-        : message (messageToDeliver)
-    {}
-
-    AndroidMessageCallback (MessageManager::MessageBase::Ptr && messageToDeliver)
-        : message (static_cast<MessageManager::MessageBase::Ptr&&> (messageToDeliver))
-    {}
-
-    void run() override
-    {
-        JUCE_TRY
-        {
-            message->messageCallback();
-
-            // delete the message already here as Java will only run the
-            // destructor of this runnable the next time the garbage
-            // collector kicks in.
-            message = nullptr;
-        }
-        JUCE_CATCH_EXCEPTION
-    }
-
-    MessageManager::MessageBase::Ptr message;
-};
-
 bool MessageManager::postMessageToSystemQueue (MessageManager::MessageBase* const message)
 {
-    return Android::Handler::getInstance()->post (new AndroidMessageCallback (message));
+    return AndroidMessageQueue::getInstance()->post (message);
 }
 //==============================================================================
 void MessageManager::broadcastMessage (const String&)
@@ -136,7 +156,19 @@ void MessageManager::stopDispatchLoop()
 
         void messageCallback() override
         {
-            android.activity.callVoidMethod (JuceAppActivity.finish);
+            auto* env = getEnv();
+
+            jmethodID quitMethod = env->GetMethodID (JuceAppActivity, "finishAndRemoveTask", "()V");
+
+            if (quitMethod != 0)
+            {
+                env->CallVoidMethod (android.activity, quitMethod);
+                return;
+            }
+
+            quitMethod = env->GetMethodID (JuceAppActivity, "finish", "()V");
+            jassert (quitMethod != 0);
+            env->CallVoidMethod (android.activity, quitMethod);
         }
     };
 

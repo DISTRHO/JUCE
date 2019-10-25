@@ -442,6 +442,7 @@ public:
              && tryInitialisingWithBufferSize (bufferSizeSamples))
         {
             sampleRateHasChanged = false;
+            shouldClose = false;
 
             channelMaps.clear();
             for (int i = 0; i <= channels.getHighestBit(); ++i)
@@ -887,7 +888,7 @@ public:
     void updateFormatWithType (DestType*)
     {
         typedef AudioData::Pointer<AudioData::Float32, AudioData::NativeEndian, AudioData::NonInterleaved, AudioData::Const> NativeType;
-        converter = new AudioData::ConverterInstance<NativeType, AudioData::Pointer<DestType, AudioData::LittleEndian, AudioData::Interleaved, AudioData::NonConst> > (1, actualNumChannels);
+        converter = new AudioData::ConverterInstance<NativeType, AudioData::Pointer<DestType, AudioData::LittleEndian, AudioData::Interleaved, AudioData::NonConst>> (1, actualNumChannels);
     }
 
     void updateFormat (bool isFloat) override
@@ -986,7 +987,7 @@ public:
                          const String& inputDeviceID,
                          const bool exclusiveMode)
         : AudioIODevice (deviceName, typeName),
-          Thread ("Juce WASAPI"),
+          Thread ("JUCE WASAPI"),
           outputDeviceId (outputDeviceID),
           inputDeviceId (inputDeviceID),
           useExclusiveMode (exclusiveMode),
@@ -1245,8 +1246,8 @@ public:
         const int numOutputBuffers  = getActiveOutputChannels().countNumberOfSetBits();
         bool sampleRateHasChanged = false;
 
-        AudioSampleBuffer ins  (jmax (1, numInputBuffers),  bufferSize + 32);
-        AudioSampleBuffer outs (jmax (1, numOutputBuffers), bufferSize + 32);
+        AudioBuffer<float> ins  (jmax (1, numInputBuffers),  bufferSize + 32);
+        AudioBuffer<float> outs (jmax (1, numOutputBuffers), bufferSize + 32);
         float** const inputBuffers  = ins.getArrayOfWritePointers();
         float** const outputBuffers = outs.getArrayOfWritePointers();
         ins.clear();
@@ -1338,10 +1339,11 @@ private:
     bool isOpen_, isStarted;
     int currentBufferSizeSamples;
     double currentSampleRate;
-    bool sampleRateChangedByOutput, deviceBecameInactive;
 
     AudioIODeviceCallback* callback;
     CriticalSection startStopLock;
+
+    bool sampleRateChangedByOutput, deviceBecameInactive;
 
     BigInteger lastKnownInputChannels, lastKnownOutputChannels;
 

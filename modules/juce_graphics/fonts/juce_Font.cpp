@@ -60,7 +60,7 @@ public:
         clearSingletonInstance();
     }
 
-    juce_DeclareSingleton (TypefaceCache, false)
+    JUCE_DECLARE_SINGLETON (TypefaceCache, false)
 
     void setSize (const int numToCache)
     {
@@ -139,14 +139,14 @@ public:
 private:
     struct CachedFace
     {
-        CachedFace() noexcept  : lastUsageCount (0) {}
+        CachedFace() noexcept {}
 
         // Although it seems a bit wacky to store the name here, it's because it may be a
         // placeholder rather than a real one, e.g. "<Sans-Serif>" vs the actual typeface name.
         // Since the typeface itself doesn't know that it may have this alias, the name under
         // which it was fetched needs to be stored separately.
         String typefaceName, typefaceStyle;
-        size_t lastUsageCount;
+        size_t lastUsageCount = 0;
         Typeface::Ptr typeface;
     };
 
@@ -157,7 +157,7 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TypefaceCache)
 };
 
-juce_ImplementSingleton (TypefaceCache)
+JUCE_IMPLEMENT_SINGLETON (TypefaceCache)
 
 void Typeface::setTypefaceCacheSize (int numFontsToCache)
 {
@@ -326,7 +326,7 @@ struct FontPlaceholderNames
            regular { "<Regular>" };
 };
 
-const FontPlaceholderNames& getFontPlaceholderNames()
+static const FontPlaceholderNames& getFontPlaceholderNames()
 {
     static FontPlaceholderNames names;
     return names;

@@ -30,8 +30,10 @@ namespace juce
     Two processes can use NamedPipe objects to exchange blocks of data.
 
     @see InterprocessConnection
+
+    @tags{Core}
 */
-class JUCE_API  NamedPipe
+class JUCE_API  NamedPipe  final
 {
 public:
     //==============================================================================

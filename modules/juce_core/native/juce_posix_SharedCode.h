@@ -187,8 +187,14 @@ static MaxNumFileHandlesInitialiser maxNumFileHandlesInitialiser;
 #endif
 
 //==============================================================================
-const juce_wchar File::separator = '/';
-const String File::separatorString ("/");
+#ifndef JUCE_GCC
+ const juce_wchar File::separator = '/';
+ const StringRef File::separatorString ("/");
+#endif
+
+juce_wchar File::getSeparatorChar()    { return '/'; }
+StringRef File::getSeparatorString()   { return "/"; }
+
 
 //==============================================================================
 File File::getCurrentWorkingDirectory()
@@ -351,7 +357,7 @@ bool File::hasWriteAccess() const
         return (hasEffectiveRootFilePermissions()
              || access (fullPath.toUTF8(), W_OK) == 0);
 
-    if ((! isDirectory()) && fullPath.containsChar (separator))
+    if ((! isDirectory()) && fullPath.containsChar (getSeparatorChar()))
         return getParentDirectory().hasWriteAccess();
 
     return false;
@@ -360,6 +366,7 @@ bool File::hasWriteAccess() const
 static bool setFileModeFlags (const String& fullPath, mode_t flags, bool shouldSet) noexcept
 {
     juce_statStruct info;
+
     if (! juce_stat (fullPath, info))
         return false;
 
@@ -897,10 +904,10 @@ bool InterProcessLock::enter (const int timeOutMillisecs)
 
     if (pimpl == nullptr)
     {
-        pimpl = new Pimpl (name, timeOutMillisecs);
+        pimpl.reset (new Pimpl (name, timeOutMillisecs));
 
         if (pimpl->handle == 0)
-            pimpl = nullptr;
+            pimpl.reset();
     }
     else
     {
@@ -918,7 +925,7 @@ void InterProcessLock::exit()
     jassert (pimpl != nullptr);
 
     if (pimpl != nullptr && --(pimpl->refCount) == 0)
-        pimpl = nullptr;
+        pimpl.reset();
 }
 
 //==============================================================================
@@ -949,8 +956,11 @@ extern "C" void* threadEntryProc (void* userData)
     return nullptr;
 }
 
-#if JUCE_ANDROID && JUCE_MODULE_AVAILABLE_juce_audio_devices && (JUCE_USE_ANDROID_OPENSLES || (! defined(JUCE_USE_ANDROID_OPENSLES) && JUCE_ANDROID_API_VERSION > 8))
-#define JUCE_ANDROID_REALTIME_THREAD_AVAILABLE 1
+#if JUCE_ANDROID && JUCE_MODULE_AVAILABLE_juce_audio_devices && \
+   ((JUCE_USE_ANDROID_OPENSLES || (! defined(JUCE_USE_ANDROID_OPENSLES) && JUCE_ANDROID_API_VERSION > 8)) \
+ || (JUCE_USE_ANDROID_OBOE || (! defined(JUCE_USE_ANDROID_OBOE) && JUCE_ANDROID_API_VERSION > 15)))
+
+  #define JUCE_ANDROID_REALTIME_THREAD_AVAILABLE 1
 #endif
 
 #if JUCE_ANDROID_REALTIME_THREAD_AVAILABLE
@@ -964,7 +974,7 @@ void Thread::launchThread()
     {
        #if JUCE_ANDROID_REALTIME_THREAD_AVAILABLE
         threadHandle = (void*) juce_createRealtimeAudioThread (threadEntryProc, this);
-        threadId = (ThreadID) threadHandle;
+        threadId = (ThreadID) threadHandle.get();
 
         return;
        #else
@@ -989,7 +999,7 @@ void Thread::launchThread()
     {
         pthread_detach (handle);
         threadHandle = (void*) handle;
-        threadId = (ThreadID) threadHandle;
+        threadId = (ThreadID) threadHandle.get();
     }
 
     if (attrPtr != nullptr)
@@ -1004,12 +1014,12 @@ void Thread::closeThreadHandle()
 
 void Thread::killThread()
 {
-    if (threadHandle != 0)
+    if (threadHandle.get() != 0)
     {
        #if JUCE_ANDROID
         jassertfalse; // pthread_cancel not available!
        #else
-        pthread_cancel ((pthread_t) threadHandle);
+        pthread_cancel ((pthread_t) threadHandle.get());
        #endif
     }
 }
@@ -1155,7 +1165,7 @@ public:
         // Looks like you're trying to launch a non-existent exe or a folder (perhaps on OSX
         // you're trying to launch the .app folder rather than the actual binary inside it?)
         jassert (File::getCurrentWorkingDirectory().getChildFile (exe).existsAsFile()
-                  || ! exe.containsChar (File::separator));
+                  || ! exe.containsChar (File::getSeparatorChar()));
 
         int pipeHandles[2] = { 0 };
 
@@ -1294,10 +1304,10 @@ bool ChildProcess::start (const StringArray& args, int streamFlags)
     if (args.size() == 0)
         return false;
 
-    activeProcess = new ActiveProcess (args, streamFlags);
+    activeProcess.reset (new ActiveProcess (args, streamFlags));
 
     if (activeProcess->childPID == 0)
-        activeProcess = nullptr;
+        activeProcess.reset();
 
     return activeProcess != nullptr;
 }

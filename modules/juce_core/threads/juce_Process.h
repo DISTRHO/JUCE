@@ -30,6 +30,8 @@ namespace juce
     process-level.
 
     @see Thread, JUCEApplicationBase
+
+    @tags{Core}
 */
 class JUCE_API  Process
 {
@@ -71,7 +73,7 @@ public:
     */
     static void JUCE_CALLTYPE makeForegroundProcess();
 
-    /** Hides the application (on an OS that supports this, e.g. OSX) */
+    /** Hides the application (on an OS that supports this, e.g. OSX, iOS, Android) */
     static void JUCE_CALLTYPE hide();
 
     //==============================================================================

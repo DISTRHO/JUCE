@@ -34,6 +34,8 @@ namespace dsp
     additions, multiplications, and linear systems of equations solving.
 
     @see LinearAlgebra
+
+    @tags{DSP}
 */
 template<typename ElementType>
 class Matrix
@@ -96,7 +98,7 @@ public:
     /** Returns an Array of 2 integers with the number of rows and columns in the
         matrix.
     */
-    Array<size_t> getSize() const noexcept             { return {{ rows, columns }}; }
+    Array<size_t> getSize() const noexcept             { return { rows, columns }; }
 
     /** Fills the contents of the matrix with zeroes. */
     void clear() noexcept                              { zeromem (data.begin(), sizeof (ElementType) * (size_t) data.size()); }
@@ -143,7 +145,7 @@ public:
     /** Scalar multiplication */
     inline Matrix& operator*= (ElementType scalar) noexcept
     {
-        std::for_each (begin(), end(), [scalar] (ElementType& x) { x*= scalar; });
+        std::for_each (begin(), end(), [scalar] (ElementType& x) { x *= scalar; });
         return *this;
     }
 

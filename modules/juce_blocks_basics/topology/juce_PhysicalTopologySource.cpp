@@ -125,7 +125,7 @@ struct PhysicalTopologySource::Internal
         {
             JUCE_ASSERT_MESSAGE_MANAGER_IS_LOCKED
 
-            listeners.call (&Listener::connectionBeingDeleted, *this);
+            listeners.call ([this] (Listener& l) { l.connectionBeingDeleted (*this); });
 
             if (midiInput != nullptr)
                 midiInput->stop();
@@ -191,7 +191,7 @@ struct PhysicalTopologySource::Internal
                 if (handleMessageFromDevice != nullptr)
                     handleMessageFromDevice (data + sizeof (BlocksProtocol::roliSysexHeader), (size_t) bodySize);
 
-            listeners.call (&Listener::handleIncomingMidiMessage, message);
+            listeners.call ([&] (Listener& l) { l.handleIncomingMidiMessage (message); });
         }
 
         std::unique_ptr<juce::MidiInput> midiInput;
@@ -370,7 +370,7 @@ struct PhysicalTopologySource::Internal
             String deviceVersion (reinterpret_cast<const char*> (d.version.version),
                                   jmin (static_cast<size_t> (d.version.length), sizeof (d.version.version)));
 
-            if (d.uid == uid && deviceVersion != version)
+            if (d.uid == uid && deviceVersion != version && deviceVersion.isNotEmpty())
                 return true;
         }
 
@@ -443,7 +443,7 @@ struct PhysicalTopologySource::Internal
             return -1;
         }
 
-        DeviceInfo* getDeviceInfoFromUID (Block::UID uid) const noexcept
+        const DeviceInfo* getDeviceInfoFromUID (Block::UID uid) const noexcept
         {
             for (auto& d : currentDeviceInfo)
                 if (d.uid == uid)
@@ -505,8 +505,7 @@ struct PhysicalTopologySource::Internal
         }
 
         //==============================================================================
-        // The following methods will be called by the DeviceToHostPacketDecoder:
-
+        // The following methods will be called by the HostPacketDecoder:
         void beginTopology (int numDevices, int numConnections)
         {
             incomingTopologyDevices.clearQuick();
@@ -815,12 +814,13 @@ struct PhysicalTopologySource::Internal
 
             for (auto& packet : packets)
             {
-                lastGlobalPingTime = juce::Time::getCurrentTime();
                 auto data = static_cast<const uint8*> (packet.getData());
 
                 BlocksProtocol::HostPacketDecoder<ConnectedDeviceGroup>
                     ::processNextPacket (*this, *data, data + 1, (int) packet.getSize() - 1);
             }
+
+            lastGlobalPingTime = juce::Time::getCurrentTime();
         }
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ConnectedDeviceGroup)
@@ -833,11 +833,13 @@ struct PhysicalTopologySource::Internal
     {
         Detector()  : defaultDetector (new MIDIDeviceDetector()), deviceDetector (*defaultDetector)
         {
+            topologyBroadcastThrottle.detector = this;
             startTimer (10);
         }
 
         Detector (DeviceDetector& dd)  : deviceDetector (dd)
         {
+            topologyBroadcastThrottle.detector = this;
             startTimer (10);
         }
 
@@ -876,6 +878,7 @@ struct PhysicalTopologySource::Internal
                         bi->sendCommandMessage (BlocksProtocol::endAPIMode);
 
                 currentTopology = {};
+                topologyBroadcastThrottle.lastTopology = {};
 
                 auto& d = getDefaultDetectorPointer();
 
@@ -920,7 +923,7 @@ struct PhysicalTopologySource::Internal
 
                 for (int i = currentTopology.blocks.size(); --i >= 0;)
                 {
-                    auto block = currentTopology.blocks.getUnchecked(i);
+                    auto block = currentTopology.blocks.getUnchecked (i);
 
                     if (! containsBlockWithUID (newDeviceInfo, block->uid))
                     {
@@ -947,12 +950,7 @@ struct PhysicalTopologySource::Internal
                 currentTopology.connections.swapWith (newDeviceConnections);
             }
 
-            for (auto d : activeTopologySources)
-                d->listeners.call (&TopologySource::Listener::topologyChanged);
-
-           #if DUMP_TOPOLOGY
-            dumpTopology (currentTopology);
-           #endif
+            topologyBroadcastThrottle.scheduleTopologyChangeCallback();
         }
 
         void handleSharedDataACK (Block::UID deviceID, uint32 packetCounter) const
@@ -1193,6 +1191,46 @@ struct PhysicalTopologySource::Internal
 
         juce::OwnedArray<ConnectedDeviceGroup> connectedDeviceGroups;
 
+        //==============================================================================
+        /** Flurries of topology messages sometimes arrive due to loose connections.
+            Avoid informing listeners until they've stabilised.
+        */
+        struct TopologyBroadcastThrottle  : private juce::Timer
+        {
+            TopologyBroadcastThrottle() = default;
+
+            void scheduleTopologyChangeCallback()
+            {
+               #ifdef JUCE_BLOCKS_TOPOLOGY_BROADCAST_THROTTLE_TIME
+                startTimer (JUCE_BLOCKS_TOPOLOGY_BROADCAST_THROTTLE_TIME);
+               #else
+                startTimer (750);
+               #endif
+            }
+
+            void timerCallback() override
+            {
+                if (detector->currentTopology != lastTopology)
+                {
+                    lastTopology = detector->currentTopology;
+
+                    for (auto* d : detector->activeTopologySources)
+                        d->listeners.call ([] (TopologySource::Listener& l) { l.topologyChanged(); });
+
+                   #if DUMP_TOPOLOGY
+                    dumpTopology (lastTopology);
+                   #endif
+                }
+
+                stopTimer();
+            }
+
+            Detector* detector = nullptr;
+            BlockTopology lastTopology;
+        };
+
+        TopologyBroadcastThrottle topologyBroadcastThrottle;
+
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Detector)
     };
 
@@ -1333,7 +1371,7 @@ struct PhysicalTopologySource::Internal
             for (uint32 i = 0; i < BlocksProtocol::numProgramMessageInts; ++i)
                 m.values[i] = data[i];
 
-            programEventListeners.call (&Block::ProgramEventListener::handleProgramEvent, *this, m);
+            programEventListeners.call ([&] (ProgramEventListener& l) { l.handleProgramEvent (*this, m); });
         }
 
         static BlockImplementation* getFrom (Block& b) noexcept
@@ -1633,7 +1671,7 @@ struct PhysicalTopologySource::Internal
             return config.getItemActive ((BlocksProtocol::ConfigItemId) item);
         }
 
-        uint32 getMaxConfigIndex () override
+        uint32 getMaxConfigIndex() override
         {
             return uint32 (BlocksProtocol::maxConfigIndex);
         }
@@ -1801,8 +1839,8 @@ struct PhysicalTopologySource::Internal
 
         void handleIncomingMidiMessage (const juce::MidiMessage& message) override
         {
-            dataInputPortListeners.call (&Block::DataInputPortListener::handleIncomingDataPortMessage,
-                                         *this, message.getRawData(), (size_t) message.getRawDataSize());
+            dataInputPortListeners.call ([&] (DataInputPortListener& l) { l.handleIncomingDataPortMessage (*this, message.getRawData(),
+                                                                                                           (size_t) message.getRawDataSize()); });
         }
 
         void connectionBeingDeleted (const MIDIDeviceConnection& c) override
@@ -1995,7 +2033,7 @@ struct PhysicalTopologySource::Internal
                 if (t.zVelocity <= 0)  t.zVelocity = t.z;
                 if (t.zVelocity <= 0)  t.zVelocity = 0.9f;
 
-                listeners.call (&TouchSurface::Listener::touchChanged, *this, t);
+                listeners.call ([&] (TouchSurface::Listener& l) { l.touchChanged (*this, t); });
             }
 
             // Normal handling:
@@ -2005,13 +2043,13 @@ struct PhysicalTopologySource::Internal
             if (touchEvent.isTouchStart)
                 status.lastStrikePressure = touchEvent.zVelocity;
 
-            listeners.call (&TouchSurface::Listener::touchChanged, *this, touchEvent);
+            listeners.call ([&] (TouchSurface::Listener& l) { l.touchChanged (*this, touchEvent); });
         }
 
         void timerCallback() override
         {
             // Find touches that seem to have become stuck, and fake a touch-end for them..
-            static const uint32 touchTimeOutMs = 40;
+            static const uint32 touchTimeOutMs = 500;
 
             for (auto& t : touches)
             {
@@ -2044,7 +2082,7 @@ struct PhysicalTopologySource::Internal
             killTouch.isTouchStart      = false;
             killTouch.isTouchEnd        = true;
 
-            listeners.call (&TouchSurface::Listener::touchChanged, *this, killTouch);
+            listeners.call ([&] (TouchSurface::Listener& l) { l.touchChanged (*this, killTouch); });
 
             status.isActive = false;
         }
@@ -2118,9 +2156,9 @@ struct PhysicalTopologySource::Internal
         void sendButtonChangeToListeners (Block::Timestamp timestamp, bool isDown)
         {
             if (isDown)
-                listeners.call (&ControlButton::Listener::buttonPressed, *this, timestamp);
+                listeners.call ([&] (ControlButton::Listener& l) { l.buttonPressed (*this, timestamp); });
             else
-                listeners.call (&ControlButton::Listener::buttonReleased, *this, timestamp);
+                listeners.call ([&] (ControlButton::Listener& l) { l.buttonReleased (*this, timestamp); });
         }
 
         BlockImplementation& blockImpl;

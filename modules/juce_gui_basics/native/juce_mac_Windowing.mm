@@ -79,7 +79,7 @@ private:
 
     void handleAsyncUpdate() override
     {
-        const int result = getResult();
+        auto result = getResult();
 
         if (callback != nullptr)
             callback->modalStateFinished (result);
@@ -164,14 +164,14 @@ static NSRect getDragRect (NSView* view, NSEvent* event)
                     fromView: nil];
 }
 
-NSView* getNSViewForDragEvent (Component* sourceComp)
+static NSView* getNSViewForDragEvent (Component* sourceComp)
 {
     if (sourceComp == nullptr)
         if (auto* draggingSource = Desktop::getInstance().getDraggingMouseSource(0))
             sourceComp = draggingSource->getComponentUnderMouse();
 
     if (sourceComp != nullptr)
-            return (NSView*) sourceComp->getWindowHandle();
+        return (NSView*) sourceComp->getWindowHandle();
 
     jassertfalse;  // This method must be called in response to a component's mouseDown or mouseDrag event!
     return nil;
@@ -247,18 +247,14 @@ bool DragAndDropContainer::performExternalDragDropOfText (const String& text, Co
     return false;
 }
 
-class NSDraggingSourceHelper   : public ObjCClass <NSObject <NSDraggingSource>>
+struct NSDraggingSourceHelper   : public ObjCClass<NSObject<NSDraggingSource>>
 {
-public:
-    NSDraggingSourceHelper()
-        : ObjCClass <NSObject <NSDraggingSource>> ("JUCENSDraggingSourceHelper_")
+    NSDraggingSourceHelper() : ObjCClass<NSObject<NSDraggingSource>> ("JUCENSDraggingSourceHelper_")
     {
         addMethod (@selector (draggingSession:sourceOperationMaskForDraggingContext:), sourceOperationMaskForDraggingContext, "c@:@@");
-
         registerClass();
     }
 
-private:
     static NSDragOperation sourceOperationMaskForDraggingContext (id, SEL, NSDraggingSession*, NSDraggingContext)
     {
         return NSDragOperationCopy;
@@ -280,6 +276,7 @@ bool DragAndDropContainer::performExternalDragDropOfFiles (const StringArray& fi
             if (auto* event = [[view window] currentEvent])
             {
                 auto* dragItems = [[[NSMutableArray alloc] init] autorelease];
+
                 for (auto& filename : files)
                 {
                     auto* nsFilename = juceStringToNS (filename);
@@ -299,12 +296,9 @@ bool DragAndDropContainer::performExternalDragDropOfFiles (const StringArray& fi
 
                 auto* helper = [draggingSourceHelper.createInstance() autorelease];
 
-                if (! [view beginDraggingSessionWithItems: dragItems
-                                                    event: event
-                                                   source: helper])
-                    return false;
-
-                return true;
+                return [view beginDraggingSessionWithItems: dragItems
+                                                     event: event
+                                                    source: helper];
             }
         }
     }
@@ -370,11 +364,11 @@ public:
         if (Process::isForegroundProcess())
         {
             if (assertion == nullptr)
-                assertion = new PMAssertion();
+                assertion.reset (new PMAssertion());
         }
         else
         {
-            assertion = nullptr;
+            assertion.reset();
         }
     }
 
@@ -419,9 +413,9 @@ static ScopedPointer<ScreenSaverDefeater> screenSaverDefeater;
 void Desktop::setScreenSaverEnabled (const bool isEnabled)
 {
     if (isEnabled)
-        screenSaverDefeater = nullptr;
+        screenSaverDefeater.reset();
     else if (screenSaverDefeater == nullptr)
-        screenSaverDefeater = new ScreenSaverDefeater();
+        screenSaverDefeater.reset (new ScreenSaverDefeater());
 }
 
 bool Desktop::isScreenSaverEnabled()
@@ -430,9 +424,8 @@ bool Desktop::isScreenSaverEnabled()
 }
 
 //==============================================================================
-class DisplaySettingsChangeCallback  : private DeletedAtShutdown
+struct DisplaySettingsChangeCallback  : private DeletedAtShutdown
 {
-public:
     DisplaySettingsChangeCallback()
     {
         CGDisplayRegisterReconfigurationCallback (displayReconfigurationCallBack, 0);
@@ -449,13 +442,12 @@ public:
         const_cast<Desktop::Displays&> (Desktop::getInstance().getDisplays()).refresh();
     }
 
-    juce_DeclareSingleton_SingleThreaded_Minimal (DisplaySettingsChangeCallback)
+    JUCE_DECLARE_SINGLETON_SINGLETHREADED_MINIMAL (DisplaySettingsChangeCallback)
 
-private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DisplaySettingsChangeCallback)
 };
 
-juce_ImplementSingleton_SingleThreaded (DisplaySettingsChangeCallback)
+JUCE_IMPLEMENT_SINGLETON (DisplaySettingsChangeCallback)
 
 static Rectangle<int> convertDisplayRect (NSRect r, CGFloat mainScreenBottom)
 {
@@ -566,6 +558,7 @@ static Image createNSWindowSnapshot (NSWindow* nsWindow)
     }
 }
 
+Image createSnapshotOfNativeWindow (void*);
 Image createSnapshotOfNativeWindow (void* nativeWindowHandle)
 {
     if (id windowOrView = (id) nativeWindowHandle)
@@ -577,7 +570,7 @@ Image createSnapshotOfNativeWindow (void* nativeWindowHandle)
             return createNSWindowSnapshot ([(NSView*) windowOrView window]);
     }
 
-    return Image();
+    return {};
 }
 
 //==============================================================================
@@ -600,12 +593,9 @@ String SystemClipboard::getTextFromClipboard()
 void Process::setDockIconVisible (bool isVisible)
 {
     ProcessSerialNumber psn { 0, kCurrentProcess };
-    ProcessApplicationTransformState state = isVisible
-        ? kProcessTransformToForegroundApplication
-        : kProcessTransformToUIElementApplication;
 
-    OSStatus err = TransformProcessType (&psn, state);
-
+    OSStatus err = TransformProcessType (&psn, isVisible ? kProcessTransformToForegroundApplication
+                                                         : kProcessTransformToUIElementApplication);
     jassert (err == 0);
     ignoreUnused (err);
 }

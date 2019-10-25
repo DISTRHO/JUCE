@@ -52,6 +52,7 @@ public:
     void launchApp();
     bool canKillApp() const;
     void killApp();
+    bool isAppRunning() const noexcept;
 
     const ClassDatabase::ClassList& getComponentList() const        { return lastComponentList; }
 
@@ -144,9 +145,7 @@ struct ChildProcessCache
 
     void removeOrphans()
     {
-        for (int i = processes.size(); --i >= 0;)
-            if (processes.getObjectPointerUnchecked (i)->getReferenceCount() <= 1)
-                processes.remove (i);
+        processes.clear();
     }
 
 private:

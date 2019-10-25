@@ -30,9 +30,11 @@
 
 #include "jucer_ProjectExport_Make.h"
 #include "jucer_ProjectExport_MSVC.h"
-#include "jucer_ProjectExport_XCode.h"
+#include "jucer_ProjectExport_Xcode.h"
 #include "jucer_ProjectExport_Android.h"
 #include "jucer_ProjectExport_CodeBlocks.h"
+
+#include "jucer_ProjectExport_CLion.h"
 
 //==============================================================================
 static void addType (Array<ProjectExporter::ExporterTypeInfo>& list,
@@ -46,8 +48,8 @@ Array<ProjectExporter::ExporterTypeInfo> ProjectExporter::getExporterTypes()
 {
     Array<ProjectExporter::ExporterTypeInfo> types;
 
-    addType (types, XCodeProjectExporter::getNameMac(),          BinaryData::export_xcode_svg,          BinaryData::export_xcode_svgSize);
-    addType (types, XCodeProjectExporter::getNameiOS(),          BinaryData::export_xcode_svg,          BinaryData::export_xcode_svgSize);
+    addType (types, XcodeProjectExporter::getNameMac(),          BinaryData::export_xcode_svg,          BinaryData::export_xcode_svgSize);
+    addType (types, XcodeProjectExporter::getNameiOS(),          BinaryData::export_xcode_svg,          BinaryData::export_xcode_svgSize);
     addType (types, MSVCProjectExporterVC2017::getName(),        BinaryData::export_visualStudio_svg,   BinaryData::export_visualStudio_svgSize);
     addType (types, MSVCProjectExporterVC2015::getName(),        BinaryData::export_visualStudio_svg,   BinaryData::export_visualStudio_svgSize);
     addType (types, MSVCProjectExporterVC2013::getName(),        BinaryData::export_visualStudio_svg,   BinaryData::export_visualStudio_svgSize);
@@ -55,6 +57,7 @@ Array<ProjectExporter::ExporterTypeInfo> ProjectExporter::getExporterTypes()
     addType (types, AndroidProjectExporter::getName(),           BinaryData::export_android_svg,        BinaryData::export_android_svgSize);
     addType (types, CodeBlocksProjectExporter::getNameWindows(), BinaryData::export_codeBlocks_svg,     BinaryData::export_codeBlocks_svgSize);
     addType (types, CodeBlocksProjectExporter::getNameLinux(),   BinaryData::export_codeBlocks_svg,     BinaryData::export_codeBlocks_svgSize);
+    addType (types, CLionProjectExporter::getName(),             BinaryData::export_clion_svg,          BinaryData::export_clion_svgSize);
 
     return types;
 }
@@ -65,8 +68,8 @@ ProjectExporter* ProjectExporter::createNewExporter (Project& project, const int
 
     switch (index)
     {
-        case 0:     exp = new XCodeProjectExporter         (project, ValueTree (XCodeProjectExporter         ::getValueTreeTypeName (false)), false); break;
-        case 1:     exp = new XCodeProjectExporter         (project, ValueTree (XCodeProjectExporter         ::getValueTreeTypeName (true)), true); break;
+        case 0:     exp = new XcodeProjectExporter         (project, ValueTree (XcodeProjectExporter         ::getValueTreeTypeName (false)), false); break;
+        case 1:     exp = new XcodeProjectExporter         (project, ValueTree (XcodeProjectExporter         ::getValueTreeTypeName (true)), true); break;
         case 2:     exp = new MSVCProjectExporterVC2017    (project, ValueTree (MSVCProjectExporterVC2017    ::getValueTreeTypeName())); break;
         case 3:     exp = new MSVCProjectExporterVC2015    (project, ValueTree (MSVCProjectExporterVC2015    ::getValueTreeTypeName())); break;
         case 4:     exp = new MSVCProjectExporterVC2013    (project, ValueTree (MSVCProjectExporterVC2013    ::getValueTreeTypeName())); break;
@@ -74,7 +77,7 @@ ProjectExporter* ProjectExporter::createNewExporter (Project& project, const int
         case 6:     exp = new AndroidProjectExporter       (project, ValueTree (AndroidProjectExporter       ::getValueTreeTypeName())); break;
         case 7:     exp = new CodeBlocksProjectExporter    (project, ValueTree (CodeBlocksProjectExporter    ::getValueTreeTypeName (CodeBlocksProjectExporter::windowsTarget)), CodeBlocksProjectExporter::windowsTarget); break;
         case 8:     exp = new CodeBlocksProjectExporter    (project, ValueTree (CodeBlocksProjectExporter    ::getValueTreeTypeName (CodeBlocksProjectExporter::linuxTarget)),   CodeBlocksProjectExporter::linuxTarget); break;
-        default:    jassertfalse; return 0;
+        case 9:     exp = new CLionProjectExporter         (project, ValueTree (CLionProjectExporter         ::getValueTreeTypeName())); break;
     }
 
     exp->createDefaultConfigs();
@@ -95,11 +98,11 @@ StringArray ProjectExporter::getExporterNames()
 
 String ProjectExporter::getValueTreeNameForExporter (const String& exporterName)
 {
-    if (exporterName == XCodeProjectExporter::getNameMac())
-        return XCodeProjectExporter::getValueTreeTypeName (false);
+    if (exporterName == XcodeProjectExporter::getNameMac())
+        return XcodeProjectExporter::getValueTreeTypeName (false);
 
-    if (exporterName == XCodeProjectExporter::getNameiOS())
-        return XCodeProjectExporter::getValueTreeTypeName (true);
+    if (exporterName == XcodeProjectExporter::getNameiOS())
+        return XcodeProjectExporter::getValueTreeTypeName (true);
 
     if (exporterName == MSVCProjectExporterVC2013::getName())
         return MSVCProjectExporterVC2013::getValueTreeTypeName();
@@ -122,6 +125,9 @@ String ProjectExporter::getValueTreeNameForExporter (const String& exporterName)
     if (exporterName == CodeBlocksProjectExporter::getNameWindows())
         return CodeBlocksProjectExporter::getValueTreeTypeName (CodeBlocksProjectExporter::CodeBlocksOS::windowsTarget);
 
+    if (exporterName == CLionProjectExporter::getName())
+        return CLionProjectExporter::getValueTreeTypeName();
+
     return {};
 }
 
@@ -138,6 +144,7 @@ StringArray ProjectExporter::getAllDefaultBuildsFolders()
     folders.add (getDefaultBuildsRootFolder() + "CodeBlocksWindows");
     folders.add (getDefaultBuildsRootFolder() + "CodeBlocksLinux");
     folders.add (getDefaultBuildsRootFolder() + "Android");
+    folders.add (getDefaultBuildsRootFolder() + "CLion");
 
     return folders;
 }
@@ -145,7 +152,7 @@ StringArray ProjectExporter::getAllDefaultBuildsFolders()
 String ProjectExporter::getCurrentPlatformExporterName()
 {
    #if JUCE_MAC
-    return XCodeProjectExporter::getNameMac();
+    return XcodeProjectExporter::getNameMac();
    #elif JUCE_WINDOWS
     return MSVCProjectExporterVC2017::getName();
    #elif JUCE_LINUX
@@ -165,10 +172,11 @@ ProjectExporter* ProjectExporter::createExporter (Project& project, const ValueT
     ProjectExporter*       exp = MSVCProjectExporterVC2013    ::createForSettings (project, settings);
     if (exp == nullptr)    exp = MSVCProjectExporterVC2015    ::createForSettings (project, settings);
     if (exp == nullptr)    exp = MSVCProjectExporterVC2017    ::createForSettings (project, settings);
-    if (exp == nullptr)    exp = XCodeProjectExporter         ::createForSettings (project, settings);
+    if (exp == nullptr)    exp = XcodeProjectExporter         ::createForSettings (project, settings);
     if (exp == nullptr)    exp = MakefileProjectExporter      ::createForSettings (project, settings);
     if (exp == nullptr)    exp = AndroidProjectExporter       ::createForSettings (project, settings);
     if (exp == nullptr)    exp = CodeBlocksProjectExporter    ::createForSettings (project, settings);
+    if (exp == nullptr)    exp = CLionProjectExporter         ::createForSettings (project, settings);
 
     jassert (exp != nullptr);
     return exp;
@@ -181,8 +189,8 @@ bool ProjectExporter::canProjectBeLaunched (Project* project)
         const char* types[] =
         {
            #if JUCE_MAC
-            XCodeProjectExporter::getValueTreeTypeName (false),
-            XCodeProjectExporter::getValueTreeTypeName (true),
+            XcodeProjectExporter::getValueTreeTypeName (false),
+            XcodeProjectExporter::getValueTreeTypeName (true),
            #elif JUCE_WINDOWS
             MSVCProjectExporterVC2013::getValueTreeTypeName(),
             MSVCProjectExporterVC2015::getValueTreeTypeName(),
@@ -209,8 +217,17 @@ ProjectExporter::ProjectExporter (Project& p, const ValueTree& state)
     : settings (state),
       project (p),
       projectType (p.getProjectType()),
-      projectName (p.getTitle()),
-      projectFolder (p.getProjectFolder())
+      projectName (p.getProjectNameString()),
+      projectFolder (p.getProjectFolder()),
+      targetLocationValue     (settings, Ids::targetFolder,        getUndoManager()),
+      extraCompilerFlagsValue (settings, Ids::extraCompilerFlags,  getUndoManager()),
+      extraLinkerFlagsValue   (settings, Ids::extraLinkerFlags,    getUndoManager()),
+      externalLibrariesValue  (settings, Ids::externalLibraries,   getUndoManager()),
+      userNotesValue          (settings, Ids::userNotes,           getUndoManager()),
+      gnuExtensionsValue      (settings, Ids::enableGNUExtensions, getUndoManager()),
+      bigIconValue            (settings, Ids::bigIcon,             getUndoManager()),
+      smallIconValue          (settings, Ids::smallIcon,           getUndoManager()),
+      extraPPDefsValue        (settings, Ids::extraDefs,           getUndoManager())
 {
 }
 
@@ -247,37 +264,40 @@ bool ProjectExporter::shouldFileBeCompiledByDefault (const RelativePath& file) c
 //==============================================================================
 void ProjectExporter::createPropertyEditors (PropertyListBuilder& props)
 {
-    props.add (new TextPropertyComponent (getTargetLocationValue(), "Target Project Folder", 2048, false),
-               "The location of the folder in which the " + name + " project will be created. "
-               "This path can be absolute, but it's much more sensible to make it relative to the jucer project directory.");
+    if (! isCLion())
+    {
+        props.add (new TextPropertyComponent (targetLocationValue, "Target Project Folder", 2048, false),
+                   "The location of the folder in which the " + name + " project will be created. "
+                   "This path can be absolute, but it's much more sensible to make it relative to the jucer project directory.");
 
-    createDependencyPathProperties (props);
+        createDependencyPathProperties (props);
 
-    props.add (new TextPropertyComponent (getExporterPreprocessorDefs(), "Extra Preprocessor Definitions", 32768, true),
-               "Extra preprocessor definitions. Use the form \"NAME1=value NAME2=value\", using whitespace, commas, "
-               "or new-lines to separate the items - to include a space or comma in a definition, precede it with a backslash.");
+        props.add (new TextPropertyComponent (extraPPDefsValue, "Extra Preprocessor Definitions", 32768, true),
+                   "Extra preprocessor definitions. Use the form \"NAME1=value NAME2=value\", using whitespace, commas, "
+                   "or new-lines to separate the items - to include a space or comma in a definition, precede it with a backslash.");
 
-    props.add (new TextPropertyComponent (getExtraCompilerFlags(), "Extra compiler flags", 8192, true),
-               "Extra command-line flags to be passed to the compiler. This string can contain references to preprocessor definitions in the "
-               "form ${NAME_OF_DEFINITION}, which will be replaced with their values.");
+        props.add (new TextPropertyComponent (extraCompilerFlagsValue, "Extra Compiler Flags", 8192, true),
+                   "Extra command-line flags to be passed to the compiler. This string can contain references to preprocessor definitions in the "
+                   "form ${NAME_OF_DEFINITION}, which will be replaced with their values.");
 
-    props.add (new TextPropertyComponent (getExtraLinkerFlags(), "Extra linker flags", 8192, true),
-               "Extra command-line flags to be passed to the linker. You might want to use this for adding additional libraries. "
-               "This string can contain references to preprocessor definitions in the form ${NAME_OF_VALUE}, which will be replaced with their values.");
+        props.add (new TextPropertyComponent (extraLinkerFlagsValue, "Extra Linker Flags", 8192, true),
+                   "Extra command-line flags to be passed to the linker. You might want to use this for adding additional libraries. "
+                   "This string can contain references to preprocessor definitions in the form ${NAME_OF_VALUE}, which will be replaced with their values.");
 
-    props.add (new TextPropertyComponent (getExternalLibraries(), "External libraries to link", 8192, true),
-               "Additional libraries to link (one per line). You should not add any platform specific decoration to these names. "
-               "This string can contain references to preprocessor definitions in the form ${NAME_OF_VALUE}, which will be replaced with their values.");
+        props.add (new TextPropertyComponent (externalLibrariesValue, "External Libraries to Link", 8192, true),
+                   "Additional libraries to link (one per line). You should not add any platform specific decoration to these names. "
+                   "This string can contain references to preprocessor definitions in the form ${NAME_OF_VALUE}, which will be replaced with their values.");
 
-    if (! isVisualStudio())
-        props.add (new BooleanPropertyComponent (getShouldUseGNUExtensionsValue(), "GNU Compiler Extensions", "Enabled"),
-                   "Enabling this will use the GNU C++ language standard variant for compilation.");
+        if (! isVisualStudio())
+            props.add (new ChoicePropertyComponent (gnuExtensionsValue, "GNU Compiler Extensions"),
+                       "Enabling this will use the GNU C++ language standard variant for compilation.");
 
-    createIconProperties (props);
+        createIconProperties (props);
+    }
 
     createExporterProperties (props);
 
-    props.add (new TextPropertyComponent (getUserNotes(), "Notes", 32768, true),
+    props.add (new TextPropertyComponent (userNotesValue, "Notes", 32768, true),
                "Extra comments: This field is not used for code or project generation, it's just a space where you can express your thoughts.");
 }
 
@@ -315,8 +335,6 @@ void ProjectExporter::createIconProperties (PropertyListBuilder& props)
 
     choices.add ("<None>");
     ids.add (var());
-    choices.add (String());
-    ids.add (var());
 
     for (int i = 0; i < images.size(); ++i)
     {
@@ -324,10 +342,10 @@ void ProjectExporter::createIconProperties (PropertyListBuilder& props)
         ids.add (images.getUnchecked(i)->getID());
     }
 
-    props.add (new ChoicePropertyComponent (getSmallIconImageItemID(), "Icon (small)", choices, ids),
+    props.add (new ChoicePropertyComponent (smallIconValue, "Icon (Small)", choices, ids),
                "Sets an icon to use for the executable.");
 
-    props.add (new ChoicePropertyComponent (getBigIconImageItemID(), "Icon (large)", choices, ids),
+    props.add (new ChoicePropertyComponent (bigIconValue, "Icon (Large)", choices, ids),
                "Sets an icon to use for the executable.");
 }
 
@@ -358,7 +376,7 @@ void ProjectExporter::addCommonAudioPluginSettings()
 
 void ProjectExporter::addVST3FolderToPath()
 {
-    const String vst3Folder (getVST3PathValue().toString());
+    auto vst3Folder = getVST3PathValue().toString();
 
     if (vst3Folder.isNotEmpty())
         addToExtraSearchPaths (RelativePath (vst3Folder, RelativePath::projectFolder), 0);
@@ -366,11 +384,11 @@ void ProjectExporter::addVST3FolderToPath()
 
 void ProjectExporter::addAAXFoldersToPath()
 {
-    const String aaxFolder = getAAXPathValue().toString();
+    auto aaxFolder = getAAXPathValue().toString();
 
     if (aaxFolder.isNotEmpty())
     {
-        const RelativePath aaxFolderPath (getAAXPathValue().toString(), RelativePath::projectFolder);
+        RelativePath aaxFolderPath (getAAXPathValue().toString(), RelativePath::projectFolder);
 
         addToExtraSearchPaths (aaxFolderPath);
         addToExtraSearchPaths (aaxFolderPath.getChildFile ("Interfaces"));
@@ -381,8 +399,8 @@ void ProjectExporter::addAAXFoldersToPath()
 //==============================================================================
 StringPairArray ProjectExporter::getAllPreprocessorDefs (const BuildConfiguration& config, const ProjectType::Target::Type targetType) const
 {
-    StringPairArray defs (mergePreprocessorDefs (config.getAllPreprocessorDefs(),
-                                                 parsePreprocessorDefs (getExporterPreprocessorDefsString())));
+    auto defs = mergePreprocessorDefs (config.getAllPreprocessorDefs(),
+                                       parsePreprocessorDefs (getExporterPreprocessorDefsString()));
     addDefaultPreprocessorDefs (defs);
     addTargetSpecificPreprocessorDefs (defs, targetType);
 
@@ -391,8 +409,8 @@ StringPairArray ProjectExporter::getAllPreprocessorDefs (const BuildConfiguratio
 
 StringPairArray ProjectExporter::getAllPreprocessorDefs() const
 {
-    StringPairArray defs (mergePreprocessorDefs (project.getPreprocessorDefs(),
-                                                 parsePreprocessorDefs (getExporterPreprocessorDefsString())));
+    auto defs = mergePreprocessorDefs (project.getPreprocessorDefs(),
+                                       parsePreprocessorDefs (getExporterPreprocessorDefsString()));
     addDefaultPreprocessorDefs (defs);
     return defs;
 }
@@ -447,7 +465,7 @@ Project::Item& ProjectExporter::getModulesGroup()
     if (modulesGroup == nullptr)
     {
         jassert (itemGroups.size() > 0); // must call copyMainGroupFromProject before this.
-        itemGroups.add (Project::Item::createGroup (project, "Juce Modules", "__modulesgroup__", true));
+        itemGroups.add (Project::Item::createGroup (project, "JUCE Modules", "__modulesgroup__", true));
         modulesGroup = &(itemGroups.getReference (itemGroups.size() - 1));
     }
 
@@ -456,9 +474,9 @@ Project::Item& ProjectExporter::getModulesGroup()
 
 void ProjectExporter::addProjectPathToBuildPathList (StringArray& pathList, const RelativePath& pathFromProjectFolder, int index) const
 {
-    const auto localPath = RelativePath (rebaseFromProjectFolderToBuildTarget (pathFromProjectFolder));
+    auto localPath = RelativePath (rebaseFromProjectFolderToBuildTarget (pathFromProjectFolder));
 
-    const auto path = isVisualStudio() ? localPath.toWindowsStyle() : localPath.toUnixStyle();
+    auto path = isVisualStudio() ? localPath.toWindowsStyle() : localPath.toUnixStyle();
 
     if (! pathList.contains (path))
         pathList.insert (index, path);
@@ -476,16 +494,16 @@ void ProjectExporter::addToExtraSearchPaths (const RelativePath& pathFromProject
 
 Value ProjectExporter::getPathForModuleValue (const String& moduleID)
 {
-    UndoManager* um = project.getUndoManagerFor (settings);
+    auto* um = getUndoManager();
 
-    ValueTree paths (settings.getOrCreateChildWithName (Ids::MODULEPATHS, um));
-    ValueTree m (paths.getChildWithProperty (Ids::ID, moduleID));
+    auto paths = settings.getOrCreateChildWithName (Ids::MODULEPATHS, um);
+    auto m = paths.getChildWithProperty (Ids::ID, moduleID);
 
     if (! m.isValid())
     {
         m = ValueTree (Ids::MODULEPATH);
         m.setProperty (Ids::ID, moduleID, um);
-        paths.addChild (m, -1, um);
+        paths.appendChild (m, um);
     }
 
     return m.getPropertyAsValue (Ids::path, um);
@@ -498,8 +516,8 @@ String ProjectExporter::getPathForModuleString (const String& moduleID) const
 
     if (exporterPath.isEmpty() || project.getModules().shouldUseGlobalPath (moduleID))
     {
-        auto id = EnabledModuleList::isJuceModule (moduleID) ? Ids::defaultJuceModulePath
-                                                             : Ids::defaultUserModulePath;
+        auto id = isJUCEModule (moduleID) ? Ids::defaultJuceModulePath
+                                          : Ids::defaultUserModulePath;
 
         if (TargetOS::getThisOS() != getTargetOSForExporter())
             return getAppSettings().getFallbackPathForOS (id, getTargetOSForExporter()).toString();
@@ -515,8 +533,9 @@ String ProjectExporter::getPathForModuleString (const String& moduleID) const
 
 void ProjectExporter::removePathForModule (const String& moduleID)
 {
-    ValueTree paths (settings.getChildWithName (Ids::MODULEPATHS));
-    ValueTree m (paths.getChildWithProperty (Ids::ID, moduleID));
+    auto paths = settings.getChildWithName (Ids::MODULEPATHS);
+    auto m = paths.getChildWithProperty (Ids::ID, moduleID);
+
     paths.removeChild (m, project.getUndoManagerFor (settings));
 }
 
@@ -538,7 +557,7 @@ RelativePath ProjectExporter::getModuleFolderRelativeToProject (const String& mo
         return RelativePath (project.getRelativePathForFile (project.getLocalModuleFolder (moduleID)),
                              RelativePath::projectFolder);
 
-    String path (getPathForModuleString (moduleID));
+    auto path = getPathForModuleString (moduleID);
 
     if (path.isEmpty())
         return getLegacyModulePath (moduleID).getChildFile (moduleID);
@@ -558,7 +577,7 @@ RelativePath ProjectExporter::getLegacyModulePath (const String& moduleID) const
                                                                 .getChildFile ("modules")
                                                                 .getChildFile (moduleID)), RelativePath::projectFolder);
 
-    String oldJucePath (getLegacyModulePath());
+    auto oldJucePath = getLegacyModulePath();
 
     if (oldJucePath.isEmpty())
         return RelativePath();
@@ -572,13 +591,13 @@ RelativePath ProjectExporter::getLegacyModulePath (const String& moduleID) const
 
 void ProjectExporter::updateOldModulePaths()
 {
-    String oldPath (getLegacyModulePath());
+    auto oldPath = getLegacyModulePath();
 
     if (oldPath.isNotEmpty())
     {
         for (int i = project.getModules().getNumModules(); --i >= 0;)
         {
-            String modID (project.getModules().getModuleID(i));
+            auto modID = project.getModules().getModuleID(i);
             getPathForModuleValue (modID) = getLegacyModulePath (modID).getParentDirectory().toUnixStyle();
         }
 
@@ -603,7 +622,7 @@ void ProjectExporter::createDefaultModulePaths()
         {
             for (int i = project.getModules().getNumModules(); --i >= 0;)
             {
-                String modID (project.getModules().getModuleID(i));
+                auto modID = project.getModules().getModuleID (i);
                 getPathForModuleValue (modID) = exporter->getPathForModuleValue (modID).getValue();
             }
 
@@ -617,7 +636,7 @@ void ProjectExporter::createDefaultModulePaths()
         {
             for (int i = project.getModules().getNumModules(); --i >= 0;)
             {
-                String modID (project.getModules().getModuleID(i));
+                auto modID = project.getModules().getModuleID (i);
                 getPathForModuleValue (modID) = exporter->getPathForModuleValue (modID).getValue();
             }
 
@@ -627,7 +646,7 @@ void ProjectExporter::createDefaultModulePaths()
 
     for (int i = project.getModules().getNumModules(); --i >= 0;)
     {
-        String modID (project.getModules().getModuleID(i));
+        auto modID = project.getModules().getModuleID (i);
         getPathForModuleValue (modID) = "../../juce";
     }
 }
@@ -650,7 +669,7 @@ ProjectExporter::BuildConfiguration::Ptr ProjectExporter::getConfiguration (int 
 
 bool ProjectExporter::hasConfigurationNamed (const String& nameToFind) const
 {
-    const ValueTree configs (getConfigurations());
+    auto configs = getConfigurations();
     for (int i = configs.getNumChildren(); --i >= 0;)
         if (configs.getChild(i) [Ids::name].toString() == nameToFind)
             return true;
@@ -660,7 +679,7 @@ bool ProjectExporter::hasConfigurationNamed (const String& nameToFind) const
 
 String ProjectExporter::getUniqueConfigName (String nm) const
 {
-    String nameRoot (nm);
+    auto nameRoot = nm;
     while (CharacterFunctions::isDigit (nameRoot.getLastCharacter()))
         nameRoot = nameRoot.dropLastCharacters (1);
 
@@ -673,12 +692,9 @@ String ProjectExporter::getUniqueConfigName (String nm) const
     return nm;
 }
 
-void ProjectExporter::addNewConfiguration (const BuildConfiguration* configToCopy)
+void ProjectExporter::addNewConfigurationFromExisting (const BuildConfiguration& configToCopy)
 {
-    const String configName (getUniqueConfigName (configToCopy != nullptr ? configToCopy->config [Ids::name].toString()
-                                                                          : "New Build Configuration"));
-
-    ValueTree configs (getConfigurations());
+    auto configs = getConfigurations();
 
     if (! configs.isValid())
     {
@@ -687,12 +703,27 @@ void ProjectExporter::addNewConfiguration (const BuildConfiguration* configToCop
     }
 
     ValueTree newConfig (Ids::CONFIGURATION);
-    if (configToCopy != nullptr)
-        newConfig = configToCopy->config.createCopy();
+    newConfig = configToCopy.config.createCopy();
 
-    newConfig.setProperty (Ids::name, configName, 0);
+    newConfig.setProperty (Ids::name, configToCopy.getName(), 0);
 
-    configs.addChild (newConfig, -1, project.getUndoManagerFor (configs));
+    configs.appendChild (newConfig, project.getUndoManagerFor (configs));
+}
+
+void ProjectExporter::addNewConfiguration (bool isDebugConfig)
+{
+    auto configs = getConfigurations();
+
+    if (! configs.isValid())
+    {
+        settings.addChild (ValueTree (Ids::CONFIGURATIONS), 0, project.getUndoManagerFor (settings));
+        configs = getConfigurations();
+    }
+
+    ValueTree newConfig (Ids::CONFIGURATION);
+    newConfig.setProperty (Ids::isDebug, isDebugConfig, project.getUndoManagerFor (settings));
+
+    configs.appendChild (newConfig, project.getUndoManagerFor (settings));
 }
 
 void ProjectExporter::BuildConfiguration::removeFromExporter()
@@ -707,15 +738,11 @@ void ProjectExporter::createDefaultConfigs()
 
     for (int i = 0; i < 2; ++i)
     {
-        addNewConfiguration (nullptr);
+        auto isDebug = i == 0;
+
+        addNewConfiguration (isDebug);
         BuildConfiguration::Ptr config (getConfiguration (i));
-
-        const bool debugConfig = i == 0;
-
-        config->getNameValue() = debugConfig ? "Debug" : "Release";
-        config->isDebugValue() = debugConfig;
-        config->getOptimisationLevel() = config->getDefaultOptimisationLevel();
-        config->getTargetBinaryName() = project.getProjectFilenameRoot();
+        config->getValue (Ids::name) = (isDebug ? "Debug" : "Release");
     }
 }
 
@@ -751,19 +778,19 @@ Image ProjectExporter::getBestIconForSize (int size, bool returnNullIfNothingBig
     }
 
     if (im == nullptr)
-        return Image();
+        return {};
 
     if (returnNullIfNothingBigEnough && im->getWidth() < size && im->getHeight() < size)
-        return Image();
+        return {};
 
     return rescaleImageForIcon (*im, size);
 }
 
 Image ProjectExporter::rescaleImageForIcon (Drawable& d, const int size)
 {
-    if (DrawableImage* drawableImage = dynamic_cast<DrawableImage*> (&d))
+    if (auto* drawableImage = dynamic_cast<DrawableImage*> (&d))
     {
-        Image im = SoftwareImageType().convert (drawableImage->getImage());
+        auto im = SoftwareImageType().convert (drawableImage->getImage());
 
         if (size == im.getWidth() && size == im.getHeight())
             return im;
@@ -818,7 +845,17 @@ bool ProjectExporter::ConstConfigIterator::next()
 
 //==============================================================================
 ProjectExporter::BuildConfiguration::BuildConfiguration (Project& p, const ValueTree& configNode, const ProjectExporter& e)
-   : config (configNode), project (p), exporter (e)
+   : config (configNode), project (p), exporter (e),
+     isDebugValue              (config, Ids::isDebug,              getUndoManager(), getValue (Ids::isDebug)),
+     configNameValue           (config, Ids::name,                 getUndoManager(), "Build Configuration"),
+     targetNameValue           (config, Ids::targetName,           getUndoManager(), project.getProjectFilenameRootString()),
+     targetBinaryPathValue     (config, Ids::binaryPath,           getUndoManager()),
+     optimisationLevelValue    (config, Ids::optimisation,         getUndoManager()),
+     linkTimeOptimisationValue (config, Ids::linkTimeOptimisation, getUndoManager(), ! isDebug()),
+     ppDefinesValue            (config, Ids::defines,              getUndoManager()),
+     headerSearchPathValue     (config, Ids::headerPath,           getUndoManager()),
+     librarySearchPathValue    (config, Ids::libraryPath,          getUndoManager()),
+     userNotesValue            (config, Ids::userNotes,            getUndoManager())
 {
 }
 
@@ -844,55 +881,43 @@ String ProjectExporter::BuildConfiguration::getGCCOptimisationFlag() const
 
 void ProjectExporter::BuildConfiguration::addGCCOptimisationProperty (PropertyListBuilder& props)
 {
-    static const char* optimisationLevels[] = { "-O0 (no optimisation)",
-                                                "-Os (minimise code size)",
-                                                "-O1 (fast)",
-                                                "-O2 (faster)",
-                                                "-O3 (fastest with safe optimisations)",
-                                                "-Ofast (uses aggressive optimisations)",
-                                                nullptr };
-
-    static const int optimisationLevelValues[] = { gccO0,
-                                                   gccOs,
-                                                   gccO1,
-                                                   gccO2,
-                                                   gccO3,
-                                                   gccOfast,
-                                                   0 };
-
-    props.add (new ChoicePropertyComponent (getOptimisationLevel(), "Optimisation",
-                                            StringArray (optimisationLevels),
-                                            Array<var> (optimisationLevelValues)),
+    props.add (new ChoicePropertyComponent (optimisationLevelValue, "Optimisation",
+                                            { "-O0 (no optimisation)", "-Os (minimise code size)", "-O1 (fast)", "-O2 (faster)",
+                                              "-O3 (fastest with safe optimisations)", "-Ofast (uses aggressive optimisations)" },
+                                            { gccO0, gccOs, gccO1, gccO2, gccO3, gccOfast }),
                "The optimisation level for this configuration");
 }
 
 void ProjectExporter::BuildConfiguration::createPropertyEditors (PropertyListBuilder& props)
 {
     if (exporter.supportsUserDefinedConfigurations())
-        props.add (new TextPropertyComponent (getNameValue(), "Name", 96, false),
+        props.add (new TextPropertyComponent (configNameValue, "Name", 96, false),
                    "The name of this configuration.");
 
-    props.add (new BooleanPropertyComponent (isDebugValue(), "Debug mode", "Debugging enabled"),
+    props.add (new ChoicePropertyComponent (isDebugValue, "Debug mode"),
                "If enabled, this means that the configuration should be built with debug symbols.");
 
-    props.add (new TextPropertyComponent (getTargetBinaryName(), "Binary name", 256, false),
+    props.add (new TextPropertyComponent (targetNameValue, "Binary name", 256, false),
                "The filename to use for the destination binary executable file. If you don't add a suffix to this name, "
                "a suitable platform-specific suffix will be added automatically.");
 
-    props.add (new TextPropertyComponent (getTargetBinaryRelativePath(), "Binary location", 1024, false),
+    props.add (new TextPropertyComponent (targetBinaryPathValue, "Binary location", 1024, false),
                "The folder in which the finished binary should be placed. Leave this blank to cause the binary to be placed "
                "in its default location in the build folder.");
 
-    props.addSearchPathProperty (getHeaderSearchPathValue(), "Header search paths", "Extra header search paths.");
-    props.addSearchPathProperty (getLibrarySearchPathValue(), "Extra library search paths", "Extra library search paths.");
+    props.addSearchPathProperty (headerSearchPathValue, "Header search paths", "Extra header search paths.");
+    props.addSearchPathProperty (librarySearchPathValue, "Extra library search paths", "Extra library search paths.");
 
-    props.add (new TextPropertyComponent (getBuildConfigPreprocessorDefs(), "Preprocessor definitions", 32768, true),
+    props.add (new TextPropertyComponent (ppDefinesValue, "Preprocessor definitions", 32768, true),
                "Extra preprocessor definitions. Use the form \"NAME1=value NAME2=value\", using whitespace, commas, or "
                "new-lines to separate the items - to include a space or comma in a definition, precede it with a backslash.");
 
+    props.add (new ChoicePropertyComponent (linkTimeOptimisationValue, "Link-Time Optimisation"),
+               "Enable this to perform link-time code optimisation. This is recommended for release builds.");
+
     createConfigProperties (props);
 
-    props.add (new TextPropertyComponent (getUserNotes(), "Notes", 32768, true),
+    props.add (new TextPropertyComponent (userNotesValue, "Notes", 32768, true),
                "Extra comments: This field is not used for code or project generation, it's just a space where you can express your thoughts.");
 }
 
@@ -904,17 +929,17 @@ StringPairArray ProjectExporter::BuildConfiguration::getAllPreprocessorDefs() co
 
 StringPairArray ProjectExporter::BuildConfiguration::getUniquePreprocessorDefs() const
 {
-    StringPairArray perConfigurationDefs (parsePreprocessorDefs (getBuildConfigPreprocessorDefsString()));
-    const StringPairArray globalDefs (project.getPreprocessorDefs());
+    auto perConfigurationDefs = parsePreprocessorDefs (getBuildConfigPreprocessorDefsString());
+    auto globalDefs = project.getPreprocessorDefs();
 
     for (int i = 0; i < globalDefs.size(); ++i)
     {
-        String globalKey   = globalDefs.getAllKeys()[i];
+        auto globalKey = globalDefs.getAllKeys()[i];
 
         int idx = perConfigurationDefs.getAllKeys().indexOf (globalKey);
         if (idx >= 0)
         {
-            String globalValue = globalDefs.getAllValues()[i];
+            auto globalValue = globalDefs.getAllValues()[i];
 
             if (globalValue == perConfigurationDefs.getAllValues()[idx])
                 perConfigurationDefs.remove (idx);
@@ -926,7 +951,7 @@ StringPairArray ProjectExporter::BuildConfiguration::getUniquePreprocessorDefs()
 
 StringArray ProjectExporter::BuildConfiguration::getHeaderSearchPaths() const
 {
-    return getSearchPathsFromString (getHeaderSearchPathString() + ';' + project.getHeaderSearchPaths());
+    return getSearchPathsFromString (getHeaderSearchPathString() + ';' + project.getHeaderSearchPathsString());
 }
 
 StringArray ProjectExporter::BuildConfiguration::getLibrarySearchPaths() const
@@ -940,24 +965,9 @@ StringArray ProjectExporter::BuildConfiguration::getLibrarySearchPaths() const
     return s;
 }
 
-String ProjectExporter::BuildConfiguration::getGCCLibraryPathFlags() const
-{
-    String s;
-    const auto libraryPaths = getSearchPathsFromString (getLibrarySearchPathString());
-
-    for (auto path : libraryPaths)
-        s << " -L" << escapeSpaces (path).replace ("~", "$(HOME)");
-
-    for (auto path : exporter.moduleLibSearchPaths)
-        s << " -L" << escapeSpaces (path).replace ("~", "$(HOME)") << "/" << getModuleLibraryArchName();
-
-    return s;
-}
-
 String ProjectExporter::getExternalLibraryFlags (const BuildConfiguration& config) const
 {
-    StringArray libraries;
-    libraries.addTokens (getExternalLibrariesString(), ";\n", "\"'");
+    auto libraries = StringArray::fromTokens (getExternalLibrariesString(), ";\n", "\"'");
     libraries.removeEmptyStrings (true);
 
     if (libraries.size() != 0)

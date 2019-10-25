@@ -24,13 +24,10 @@
   ==============================================================================
 */
 
-namespace juce
-{
+#if JucePlugin_Build_RTAS
 
 #include "../../juce_core/system/juce_TargetPlatform.h"
 #include "../utility/juce_CheckSettingMacros.h"
-
-#if JucePlugin_Build_RTAS
 
 #ifdef _MSC_VER
  // (this is a workaround for a build problem in VC9)
@@ -113,6 +110,11 @@ namespace juce
 #endif
 
 #include "../utility/juce_IncludeModuleHeaders.h"
+
+using namespace juce;
+
+namespace juce
+{
 
 #ifdef _MSC_VER
  #pragma pack (pop)
@@ -597,7 +599,7 @@ public:
                         channels [i] = inputs [i];
                 }
 
-                AudioSampleBuffer chans (channels, totalChans, numSamples);
+                AudioBuffer<float> chans (channels, totalChans, numSamples);
 
                 if (mBypassed)
                     juceFilter->processBlockBypassed (chans, midiEvents);
@@ -683,9 +685,24 @@ public:
     ComponentResult UpdateControlValue (long controlIndex, long value) override
     {
         if (controlIndex != bypassControlIndex)
-            juceFilter->setParameter (controlIndex - 2, longToFloat (value));
+        {
+            auto paramIndex = controlIndex - 2;
+            auto floatValue = longToFloat (value);
+
+            if (auto* param = owner.getParameters()[paramIndex])
+            {
+                param->setValue (floatValue);
+                param->sendValueChangedMessageToListeners (floatValue);
+            }
+            else
+            {
+                juceFilter->setParameter (paramIndex, floatValue);
+            }
+        }
         else
+        {
             mBypassed = (value > 0);
+        }
 
         return CProcess::UpdateControlValue (controlIndex, value);
     }
@@ -1036,6 +1053,8 @@ private:
 
 void initialiseMacRTAS();
 
+} // namespace juce
+
 CProcessGroupInterface* CProcessGroup::CreateProcessGroup()
 {
    #if JUCE_MAC
@@ -1046,5 +1065,3 @@ CProcessGroupInterface* CProcessGroup::CreateProcessGroup()
 }
 
 #endif
-
-} // namespace juce

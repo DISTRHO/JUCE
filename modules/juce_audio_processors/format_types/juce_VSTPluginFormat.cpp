@@ -246,6 +246,330 @@ namespace
 #endif
 
 //==============================================================================
+class VSTXMLInfo
+{
+public:
+    static VSTXMLInfo* createFor (const juce::XmlElement& xml)
+    {
+        if (xml.hasTagName ("VSTParametersStructure"))
+            return new VSTXMLInfo (xml);
+
+        if (const auto* x = xml.getChildByName ("VSTParametersStructure"))
+            return new VSTXMLInfo (*x);
+
+        return nullptr;
+    }
+
+    struct Group;
+
+    struct Base
+    {
+        Base() noexcept {}
+        virtual ~Base() {}
+
+        Group* parent = nullptr;
+    };
+
+    struct Param  : public Base
+    {
+        int paramID;
+        juce::String expr, name, label;
+        juce::StringArray shortNames;
+        juce::String type;
+        int numberOfStates;
+        float defaultValue;
+    };
+
+    struct Group  : public Base
+    {
+        juce::String name;
+        juce::OwnedArray<Base> paramTree;
+    };
+
+    struct Range
+    {
+        Range() noexcept {}
+        Range (const juce::String& s)       { set (s); }
+
+        void set (const juce::String& s)
+        {
+            inclusiveLow  = s.startsWithChar ('[');
+            inclusiveHigh = s.endsWithChar   (']');
+
+            auto str = s.removeCharacters ("[]");
+
+            low  = str.upToFirstOccurrenceOf (",", false, false).getFloatValue();
+            high = str.fromLastOccurrenceOf  (",", false, false).getFloatValue();
+        }
+
+        bool contains (float f) const noexcept
+        {
+            return (inclusiveLow  ? (f >= low)  : (f > low))
+                && (inclusiveHigh ? (f <= high) : (f < high));
+        }
+
+        float low = 0;
+        float high = 0;
+
+        bool inclusiveLow = false;
+        bool inclusiveHigh = false;
+    };
+
+    struct Entry
+    {
+        juce::String name;
+        Range range;
+    };
+
+    struct ValueType
+    {
+        juce::String name, label;
+        juce::OwnedArray<Entry> entries;
+    };
+
+    struct Template
+    {
+        juce::String name;
+        juce::OwnedArray<Param> params;
+    };
+
+    const Param* getParamForID (const int paramID, const Group* const grp) const
+    {
+        for (auto item : (grp != nullptr ? grp->paramTree : paramTree))
+        {
+            if (auto param = dynamic_cast<const Param*> (item))
+                if (param->paramID == paramID)
+                    return param;
+
+            if (auto group = dynamic_cast<const Group*> (item))
+                if (auto res = getParamForID (paramID, group))
+                    return res;
+        }
+
+        return nullptr;
+    }
+
+    const ValueType* getValueType (const juce::String& name) const
+    {
+        for (auto v : valueTypes)
+            if (v->name == name)
+                return v;
+
+        return nullptr;
+    }
+
+    juce::OwnedArray<Base> paramTree;
+    juce::OwnedArray<ValueType> valueTypes;
+    juce::OwnedArray<Template> templates;
+
+    ValueType switchValueType;
+
+private:
+    VSTXMLInfo (const juce::XmlElement& xml)
+    {
+        switchValueType.entries.add (new Entry({ TRANS("Off"), Range ("[0, 0.5[") }));
+        switchValueType.entries.add (new Entry({ TRANS("On"),  Range ("[0.5, 1]") }));
+
+        forEachXmlChildElement (xml, item)
+        {
+            if (item->hasTagName ("Param"))           parseParam (*item, nullptr, nullptr);
+            else if (item->hasTagName ("ValueType"))  parseValueType (*item);
+            else if (item->hasTagName ("Template"))   parseTemplate (*item);
+            else if (item->hasTagName ("Group"))      parseGroup (*item, nullptr);
+        }
+    }
+
+    void parseParam (const juce::XmlElement& item, Group* group, Template* temp)
+    {
+        auto param = new Param();
+
+        if (temp != nullptr)
+            param->expr = item.getStringAttribute ("id");
+        else
+            param->paramID = item.getIntAttribute ("id");
+
+        param->name           = item.getStringAttribute ("name");
+        param->label          = item.getStringAttribute ("label");
+        param->type           = item.getStringAttribute ("type");
+        param->numberOfStates = item.getIntAttribute ("numberOfStates");
+        param->defaultValue   = (float) item.getDoubleAttribute ("defaultValue");
+
+        param->shortNames.addTokens (item.getStringAttribute ("shortName"), ",", juce::StringRef());
+        param->shortNames.trim();
+        param->shortNames.removeEmptyStrings();
+
+        if (group != nullptr)
+        {
+            group->paramTree.add (param);
+            param->parent = group;
+        }
+        else if (temp != nullptr)
+        {
+            temp->params.add (param);
+        }
+        else
+        {
+            paramTree.add (param);
+        }
+    }
+
+    void parseValueType (const juce::XmlElement& item)
+    {
+        auto vt = new ValueType();
+        valueTypes.add (vt);
+
+        vt->name  = item.getStringAttribute ("name");
+        vt->label = item.getStringAttribute ("label");
+
+        int curEntry = 0;
+        const int numEntries = item.getNumChildElements();
+
+        forEachXmlChildElementWithTagName (item, entryXml, "Entry")
+        {
+            auto entry = new Entry();
+            entry->name = entryXml->getStringAttribute ("name");
+
+            if (entryXml->hasAttribute ("value"))
+            {
+                entry->range.set(entryXml->getStringAttribute ("value"));
+            }
+            else
+            {
+                entry->range.low  = curEntry / (float) numEntries;
+                entry->range.high = (curEntry + 1) / (float) numEntries;
+
+                entry->range.inclusiveLow  = true;
+                entry->range.inclusiveHigh = (curEntry == numEntries - 1);
+            }
+
+            vt->entries.add (entry);
+            ++curEntry;
+        }
+    }
+
+    void parseTemplate (const juce::XmlElement& item)
+    {
+        auto temp = new Template();
+        templates.add (temp);
+        temp->name = item.getStringAttribute ("name");
+
+        forEachXmlChildElement (item, param)
+            parseParam (*param, nullptr, temp);
+    }
+
+    void parseGroup (const juce::XmlElement& item, Group* parentGroup)
+    {
+        auto group = new Group();
+
+        if (parentGroup)
+        {
+            parentGroup->paramTree.add (group);
+            group->parent = parentGroup;
+        }
+        else
+        {
+            paramTree.add (group);
+        }
+
+        group->name = item.getStringAttribute ("name");
+
+        if (item.hasAttribute ("template"))
+        {
+            juce::StringArray variables;
+            variables.addTokens (item.getStringAttribute ("values"), ";", juce::StringRef());
+            variables.trim();
+
+            for (auto temp : templates)
+            {
+                if (temp->name == item.getStringAttribute ("template"))
+                {
+                    for (int i = 0; i < temp->params.size(); ++i)
+                    {
+                        auto param = new Param();
+                        group->paramTree.add (param);
+
+                        param->parent         = group;
+                        param->paramID        = evaluate (temp->params[i]->expr, variables);
+                        param->defaultValue   = temp->params[i]->defaultValue;
+                        param->label          = temp->params[i]->label;
+                        param->name           = temp->params[i]->name;
+                        param->numberOfStates = temp->params[i]->numberOfStates;
+                        param->shortNames     = temp->params[i]->shortNames;
+                        param->type           = temp->params[i]->type;
+                    }
+                }
+            }
+        }
+        else
+        {
+            forEachXmlChildElement (item, subItem)
+            {
+                if (subItem->hasTagName ("Param"))       parseParam (*subItem, group, nullptr);
+                else if (subItem->hasTagName ("Group"))  parseGroup (*subItem, group);
+            }
+        }
+    }
+
+    int evaluate (juce::String expr, const juce::StringArray& variables) const
+    {
+        juce::StringArray names;
+        juce::Array<int> vals;
+
+        for (auto& v : variables)
+        {
+            if (v.contains ("="))
+            {
+                names.add (v.upToFirstOccurrenceOf ("=", false, false));
+                vals.add  (v.fromFirstOccurrenceOf ("=", false, false).getIntValue());
+            }
+        }
+
+        for (int i = 0; i < names.size(); ++i)
+        {
+            for (;;)
+            {
+                const int idx = expr.indexOfWholeWord (names[i]);
+                if (idx < 0)
+                    break;
+
+                expr = expr.replaceSection (idx, names[i].length(), juce::String (vals[i]));
+            }
+        }
+
+        expr = expr.retainCharacters ("01234567890-+")
+                   .replace ("+", " + ")
+                   .replace ("-", " - ");
+
+        juce::StringArray tokens;
+        tokens.addTokens (expr, " ", juce::StringRef());
+
+        bool add = true;
+        int val = 0;
+
+        for (const auto& s : tokens)
+        {
+            if (s == "+")
+            {
+                add = true;
+            }
+            else if (s == "-")
+            {
+                add = false;
+            }
+            else
+            {
+                if (add)
+                    val += s.getIntValue();
+                else
+                    val -= s.getIntValue();
+            }
+        }
+
+        return val;
+    }
+};
+
+//==============================================================================
 struct ModuleHandle    : public ReferenceCountedObject
 {
     File file;
@@ -435,16 +759,15 @@ struct ModuleHandle    : public ReferenceCountedObject
 
                             ok = true;
 
-                            Array<File> vstXmlFiles;
-                            file
-                               #if JUCE_MAC
-                                .getChildFile ("Contents")
-                                .getChildFile ("Resources")
-                               #endif
-                                .findChildFiles (vstXmlFiles, File::findFiles, false, "*.vstxml");
+                            auto vstXmlFiles = file
+                                                   #if JUCE_MAC
+                                                    .getChildFile ("Contents")
+                                                    .getChildFile ("Resources")
+                                                   #endif
+                                                    .findChildFiles (File::findFiles, false, "*.vstxml");
 
-                            if (vstXmlFiles.size() > 0)
-                                vstXml = XmlDocument::parse (vstXmlFiles.getReference(0));
+                            if (! vstXmlFiles.isEmpty())
+                                vstXml.reset (XmlDocument::parse (vstXmlFiles.getReference(0)));
                         }
                     }
 
@@ -497,11 +820,157 @@ static const int defaultVSTBlockSizeValue = 512;
 #endif
 
 //==============================================================================
-//==============================================================================
 struct VSTPluginInstance     : public AudioPluginInstance,
                                private Timer,
                                private AsyncUpdater
 {
+    struct VSTParameter final   : public Parameter
+    {
+        VSTParameter (VSTPluginInstance& parent,
+                      const String& paramName,
+                      const Array<String>& shortParamNames,
+                      float paramDefaultValue,
+                      const String& paramLabel,
+                      bool paramIsAutomatable,
+                      bool paramIsDiscrete,
+                      int numParamSteps,
+                      bool isBoolSwitch,
+                      const StringArray& paramValueStrings,
+                      const VSTXMLInfo::ValueType* paramValueType)
+            : pluginInstance (parent),
+              name (paramName),
+              shortNames (shortParamNames),
+              defaultValue (paramDefaultValue),
+              label (paramLabel),
+              automatable (paramIsAutomatable),
+              discrete (paramIsDiscrete),
+              numSteps (numParamSteps),
+              isSwitch (isBoolSwitch),
+              vstValueStrings (paramValueStrings),
+              valueType (paramValueType)
+        {
+        }
+
+        virtual float getValue() const override
+        {
+            if (auto* effect = pluginInstance.vstEffect)
+            {
+                const ScopedLock sl (pluginInstance.lock);
+
+                return effect->getParameterValueFunction (effect, getParameterIndex());
+            }
+
+            return 0.0f;
+        }
+
+        virtual void setValue (float newValue) override
+        {
+            if (auto* effect = pluginInstance.vstEffect)
+            {
+                const ScopedLock sl (pluginInstance.lock);
+
+                if (effect->getParameterValueFunction (effect, getParameterIndex()) != newValue)
+                    effect->setParameterValueFunction (effect, getParameterIndex(), newValue);
+            }
+        }
+
+        String getText (float value, int maximumStringLength) const override
+        {
+            if (valueType != nullptr)
+            {
+                for (auto& v : valueType->entries)
+                    if (v->range.contains (value))
+                        return v->name;
+            }
+
+            return Parameter::getText (value, maximumStringLength);
+        }
+
+        float getValueForText (const String& text) const override
+        {
+            if (valueType != nullptr)
+            {
+                for (auto& v : valueType->entries)
+                    if (v->name == text)
+                        return (v->range.high + v->range.low) / 2.0f;
+            }
+
+            return Parameter::getValueForText (text);
+        }
+
+        String getCurrentValueAsText() const override
+        {
+            if (valueType != nullptr || ! vstValueStrings.isEmpty())
+                return getText (getValue(), 1024);
+
+            return pluginInstance.getTextForOpcode (getParameterIndex(), plugInOpcodeGetParameterText);
+        }
+
+        float getDefaultValue() const override
+        {
+            return defaultValue;
+        }
+
+        String getName (int maximumStringLength) const override
+        {
+            if (name.length() <= maximumStringLength)
+                return name;
+
+            if (! shortNames.isEmpty())
+            {
+                for (auto& n : shortNames)
+                    if (n.length() <= maximumStringLength)
+                        return n;
+
+                return shortNames.getLast();
+            }
+
+            return name;
+        }
+
+        String getLabel() const override
+        {
+            return label;
+        }
+
+        bool isAutomatable() const override
+        {
+            return automatable;
+        }
+
+        bool isDiscrete() const override
+        {
+            return discrete;
+        }
+
+        bool isBoolean() const override
+        {
+            return isSwitch;
+        }
+
+        int getNumSteps() const override
+        {
+            return numSteps;
+        }
+
+        StringArray getAllValueStrings() const override
+        {
+            return vstValueStrings;
+        }
+
+        VSTPluginInstance& pluginInstance;
+
+        const String name;
+        const Array<String> shortNames;
+        const float defaultValue;
+        const String label;
+        const bool automatable, discrete;
+        const int numSteps;
+        const bool isSwitch;
+        const StringArray vstValueStrings;
+        const VSTXMLInfo::ValueType* const valueType;
+    };
+
     VSTPluginInstance (const ModuleHandle::Ptr& mh, const BusesProperties& ioConfig, VstEffectInterface* effect,
                        double sampleRateToUse, int blockSizeToUse)
         : AudioPluginInstance (ioConfig),
@@ -509,6 +978,88 @@ struct VSTPluginInstance     : public AudioPluginInstance,
           vstModule (mh),
           name (mh->pluginName)
     {
+        jassert (vstEffect != nullptr);
+
+        if (auto* xml = vstModule->vstXml.get())
+            xmlInfo.reset (VSTXMLInfo::createFor (*xml));
+
+        for (int i = 0; i < vstEffect->numParameters; ++i)
+        {
+            String paramName (getTextForOpcode (i, plugInOpcodeGetParameterName));
+            Array<String> shortParamNames;
+            float defaultValue = 0;
+            String label (getTextForOpcode (i, plugInOpcodeGetParameterLabel));
+            bool isAutomatable = dispatch (plugInOpcodeIsParameterAutomatable, i, 0, 0, 0) != 0;
+            bool isDiscrete = false;
+            int numSteps = AudioProcessor::getDefaultNumParameterSteps();
+            bool isBoolSwitch = false;
+            StringArray parameterValueStrings;
+            const VSTXMLInfo::ValueType* valueType = nullptr;
+
+            if (xmlInfo != nullptr)
+            {
+                if (auto* param = xmlInfo->getParamForID (i, nullptr))
+                {
+                    paramName = param->name;
+
+                    for (auto& n : param->shortNames)
+                        shortParamNames.add (n);
+
+                    struct LengthComparator
+                    {
+                        static int compareElements (const juce::String& first, const juce::String& second) noexcept
+                        {
+                            return first.length() - second.length();
+                        }
+                    };
+
+                    LengthComparator comp;
+                    shortParamNames.sort (comp);
+
+                    defaultValue = param->defaultValue;
+                    label = param->label;
+
+                    if (param->type == "switch")
+                    {
+                        isBoolSwitch = true;
+                        numSteps = 2;
+                        valueType = &xmlInfo->switchValueType;
+                    }
+                    else
+                    {
+                        valueType = xmlInfo->getValueType (param->type);
+                    }
+
+                    if (param->numberOfStates >= 2)
+                    {
+                        numSteps = param->numberOfStates;
+
+                        if (valueType != nullptr)
+                        {
+                            for (auto* entry : valueType->entries)
+                                parameterValueStrings.add (entry->name);
+
+                            parameterValueStrings.removeEmptyStrings();
+                        }
+                    }
+
+                    isDiscrete = (numSteps != AudioProcessor::getDefaultNumParameterSteps());
+                }
+            }
+
+            addParameter (new VSTParameter (*this,
+                                            paramName,
+                                            shortParamNames,
+                                            defaultValue,
+                                            label,
+                                            isAutomatable,
+                                            isDiscrete,
+                                            numSteps,
+                                            isBoolSwitch,
+                                            parameterValueStrings,
+                                            valueType));
+        }
+
         setRateAndBufferSizeDetails (sampleRateToUse, blockSizeToUse);
     }
 
@@ -740,12 +1291,18 @@ struct VSTPluginInstance     : public AudioPluginInstance,
     //==============================================================================
     void prepareToPlay (double rate, int samplesPerBlockExpected) override
     {
+        auto numInputBuses  = getBusCount (true);
+        auto numOutputBuses = getBusCount (false);
+
         setRateAndBufferSizeDetails (rate, samplesPerBlockExpected);
 
-        SpeakerMappings::VstSpeakerConfigurationHolder inArr  (getChannelLayoutOfBus (true,  0));
-        SpeakerMappings::VstSpeakerConfigurationHolder outArr (getChannelLayoutOfBus (false, 0));
+        if (numInputBuses <= 1 && numOutputBuses <= 1)
+        {
+            SpeakerMappings::VstSpeakerConfigurationHolder inArr  (getChannelLayoutOfBus (true,  0));
+            SpeakerMappings::VstSpeakerConfigurationHolder outArr (getChannelLayoutOfBus (false, 0));
 
-        dispatch (plugInOpcodeSetSpeakerConfiguration, 0, (pointer_sized_int) &inArr.get(), (void*) &outArr.get(), 0.0f);
+            dispatch (plugInOpcodeSetSpeakerConfiguration, 0, (pointer_sized_int) &inArr.get(), (void*) &outArr.get(), 0.0f);
+        }
 
         vstHostTime.tempoBPM = 120.0;
         vstHostTime.timeSignatureNumerator = 4;
@@ -794,11 +1351,14 @@ struct VSTPluginInstance     : public AudioPluginInstance,
                 setPower (true);
 
             // dodgy hack to force some plugins to initialise the sample rate..
-            if ((! hasEditor()) && getNumParameters() > 0)
+            if (! hasEditor())
             {
-                auto old = getParameter (0);
-                setParameter (0, (old < 0.5f) ? 1.0f : 0.0f);
-                setParameter (0, old);
+                if (auto* firstParam = getParameters()[0])
+                {
+                    auto old = firstParam->getValue();
+                    firstParam->setValue ((old < 0.5f) ? 1.0f : 0.0f);
+                    firstParam->setValue (old);
+                }
             }
 
             dispatch (plugInOpcodeStartProcess, 0, 0, 0, 0);
@@ -936,46 +1496,6 @@ struct VSTPluginInstance     : public AudioPluginInstance,
     }
 
     //==============================================================================
-    int getNumParameters() override      { return vstEffect != nullptr ? vstEffect->numParameters : 0; }
-
-    float getParameter (int index) override
-    {
-        if (vstEffect != nullptr && isPositiveAndBelow (index, vstEffect->numParameters))
-        {
-            const ScopedLock sl (lock);
-            return vstEffect->getParameterValueFunction (vstEffect, index);
-        }
-
-        return 0.0f;
-    }
-
-    void setParameter (int index, float newValue) override
-    {
-        if (vstEffect != nullptr && isPositiveAndBelow (index, vstEffect->numParameters))
-        {
-            const ScopedLock sl (lock);
-
-            if (vstEffect->getParameterValueFunction (vstEffect, index) != newValue)
-                vstEffect->setParameterValueFunction (vstEffect, index, newValue);
-        }
-    }
-
-    const String getParameterName (int index) override       { return getTextForOpcode (index, plugInOpcodeGetParameterName); }
-    const String getParameterText (int index) override       { return getTextForOpcode (index, plugInOpcodeGetParameterText); }
-    String getParameterLabel (int index) const override      { return getTextForOpcode (index, plugInOpcodeGetParameterLabel); }
-
-    bool isParameterAutomatable (int index) const override
-    {
-        if (vstEffect != nullptr)
-        {
-            jassert (index >= 0 && index < vstEffect->numParameters);
-            return dispatch (plugInOpcodeIsParameterAutomatable, index, 0, 0, 0) != 0;
-        }
-
-        return false;
-    }
-
-    //==============================================================================
     int getNumPrograms() override          { return vstEffect != nullptr ? jmax (0, vstEffect->numPrograms) : 0; }
 
     // NB: some plugs return negative numbers from this function.
@@ -1043,7 +1563,14 @@ struct VSTPluginInstance     : public AudioPluginInstance,
     {
         switch (opcode)
         {
-            case hostOpcodeParameterChanged:            sendParamChangeMessageToListeners (index, opt); break;
+            case hostOpcodeParameterChanged:
+                if (auto* param = getParameters()[index])
+                    param->sendValueChangedMessageToListeners (opt);
+                else
+                    jassertfalse; // Invalid parameter index!
+
+                break;
+
             case hostOpcodePreAudioProcessingEvents:    handleMidiFromPlugin ((const VstEventBlock*) ptr); break;
             case hostOpcodeGetTimingInfo:               return getVSTTime();
             case hostOpcodeIdle:                        handleIdle(); break;
@@ -1060,8 +1587,21 @@ struct VSTPluginInstance     : public AudioPluginInstance,
             case hostOpcodeTempoAt:                     return (pointer_sized_int) (extraFunctions != nullptr ? extraFunctions->getTempoAt ((int64) value) : 0);
             case hostOpcodeGetAutomationState:          return (pointer_sized_int) (extraFunctions != nullptr ? extraFunctions->getAutomationState() : 0);
 
-            case hostOpcodeParameterChangeGestureBegin: beginParameterChangeGesture (index); break;
-            case hostOpcodeParameterChangeGestureEnd:   endParameterChangeGesture (index); break;
+            case hostOpcodeParameterChangeGestureBegin:
+                if (auto* param = getParameters()[index])
+                    param->beginChangeGesture();
+                else
+                    jassertfalse; // Invalid parameter index!
+
+                break;
+
+            case hostOpcodeParameterChangeGestureEnd:
+                if (auto* param = getParameters()[index])
+                    param->endChangeGesture();
+                else
+                    jassertfalse; // Invalid parameter index!
+
+                break;
 
             case hostOpcodePinConnected:                    return isValidChannel (index, value == 0) ? 0 : 1; // (yes, 0 = true)
             case hostOpcodeGetCurrentAudioProcessingLevel:  return isNonRealtime() ? 4 : 0;
@@ -1218,7 +1758,8 @@ struct VSTPluginInstance     : public AudioPluginInstance,
             changeProgramName (getCurrentProgram(), prog->prgName);
 
             for (int i = 0; i < fxbSwap (prog->numParams); ++i)
-                setParameter (i, fxbSwapFloat (prog->params[i]));
+                if (auto* param = getParameters()[i])
+                    param->setValue (fxbSwapFloat (prog->params[i]));
         }
         else if (compareMagic (set->fxMagic, "FBCh"))
         {
@@ -1253,7 +1794,7 @@ struct VSTPluginInstance     : public AudioPluginInstance,
     bool saveToFXBFile (MemoryBlock& dest, bool isFXB, int maxSizeMB = 128)
     {
         auto numPrograms = getNumPrograms();
-        auto numParams = getNumParameters();
+        auto numParams = getParameters().size();
 
         if (usesChunks())
         {
@@ -1404,6 +1945,8 @@ private:
 
     AudioBuffer<double> tmpBufferDouble;
     HeapBlock<double*> channelBufferDouble;
+
+    ScopedPointer<VSTXMLInfo> xmlInfo;
 
     static pointer_sized_int handleCanDo (const char* name)
     {
@@ -1824,7 +2367,8 @@ private:
             changeProgramName (getCurrentProgram(), prog->prgName);
 
             for (int i = 0; i < fxbSwap (prog->numParams); ++i)
-                setParameter (i, fxbSwapFloat (prog->params[i]));
+                if (auto* param = getParameters()[i])
+                    param->setValue (fxbSwapFloat (prog->params[i]));
 
             return true;
         }
@@ -1871,7 +2415,7 @@ private:
 
     void setParamsInProgramBlock (fxProgram* prog)
     {
-        auto numParams = getNumParameters();
+        auto numParams = getParameters().size();
 
         prog->chunkMagic = fxbName ("CcnK");
         prog->byteSize = 0;
@@ -1884,7 +2428,8 @@ private:
         getCurrentProgramName().copyToUTF8 (prog->prgName, sizeof (prog->prgName) - 1);
 
         for (int i = 0; i < numParams; ++i)
-            prog->params[i] = fxbSwapFloat (getParameter (i));
+            if (auto* param = getParameters()[i])
+                prog->params[i] = fxbSwapFloat (param->getValue());
     }
 
     void updateStoredProgramNames()
@@ -1924,15 +2469,17 @@ private:
     //==============================================================================
     void createTempParameterStore (MemoryBlock& dest)
     {
-        dest.setSize (64 + 4 * (size_t) getNumParameters());
+        auto numParameters = getParameters().size();
+        dest.setSize (64 + 4 * (size_t) numParameters);
         dest.fillWith (0);
 
         getCurrentProgramName().copyToUTF8 ((char*) dest.getData(), 63);
 
         auto p = (float*) (((char*) dest.getData()) + 64);
 
-        for (int i = 0; i < getNumParameters(); ++i)
-            p[i] = getParameter(i);
+        for (int i = 0; i < numParameters; ++i)
+            if (auto* param = getParameters()[i])
+                p[i] = param->getValue();
     }
 
     void restoreFromTempParameterStore (const MemoryBlock& m)
@@ -1940,9 +2487,11 @@ private:
         changeProgramName (getCurrentProgram(), (const char*) m.getData());
 
         auto p = (float*) (((char*) m.getData()) + 64);
+        auto numParameters = getParameters().size();
 
-        for (int i = 0; i < getNumParameters(); ++i)
-            setParameter (i, p[i]);
+        for (int i = 0; i < numParameters; ++i)
+            if (auto* param = getParameters()[i])
+                param->setValue (p[i]);
     }
 
     pointer_sized_int getVstDirectory() const
@@ -1968,32 +2517,44 @@ private:
 
         if (v != 0)
         {
-            int versionBits[32];
-            int n = 0;
+            // See yfede's post for the rational on this encoding
+            // https://forum.juce.com/t/issues-with-version-integer-reported-by-vst2/23867/6
 
-            for (auto vv = v; vv != 0; vv /= 10)
-                versionBits [n++] = vv % 10;
+            unsigned int major = 0, minor = 0, bugfix = 0, build = 0;
 
-            if (n > 4) // if the number ends up silly, it's probably encoded as hex instead of decimal..
+            if (v < 10)            // Encoding A
             {
-                n = 0;
-
-                for (auto vv = v; vv != 0; vv >>= 8)
-                    versionBits [n++] = vv & 255;
+                major = v;
+            }
+            else if (v < 10000)    // Encoding B
+            {
+                major  = (v / 1000);
+                minor  = (v % 1000) / 100;
+                bugfix = (v % 100)  / 10;
+                build  = (v % 10);
+            }
+            else if (v < 0x10000)  // Encoding C
+            {
+                major  = (v / 10000);
+                minor  = (v % 10000) / 1000;
+                bugfix = (v % 1000)  / 100;
+                build  = (v % 100)   / 10;
+            }
+            else if (v < 0x650000) // Encoding D
+            {
+                major  = (v >> 16) & 0xff;
+                minor  = (v >> 8)  & 0xff;
+                bugfix = (v >> 0)  & 0xff;
+            }
+            else                  // Encoding E
+            {
+                major  = (v / 10000000);
+                minor  = (v % 10000000) / 100000;
+                bugfix = (v % 100000)   / 1000;
+                build  = (v % 1000);
             }
 
-            while (n > 1 && versionBits [n - 1] == 0)
-                --n;
-
-            s << 'V';
-
-            while (n > 0)
-            {
-                s << versionBits [--n];
-
-                if (n > 0)
-                    s << '.';
-            }
+            s << (int) major << '.' << (int) minor << '.' << (int) bugfix << '.' << (int) build;
         }
 
         return s;
@@ -2056,10 +2617,16 @@ public:
 
         #if JUCE_SUPPORT_CARBON
         if (! plug.usesCocoaNSView)
-            addAndMakeVisible (carbonWrapper = new CarbonWrapperComponent (*this));
+        {
+            carbonWrapper.reset (new CarbonWrapperComponent (*this));
+            addAndMakeVisible (carbonWrapper.get());
+        }
         else
         #endif
-            addAndMakeVisible (cocoaWrapper = new AutoResizingNSViewComponentWithParent());
+        {
+            cocoaWrapper.reset (new AutoResizingNSViewComponentWithParent());
+            addAndMakeVisible (cocoaWrapper.get());
+        }
        #endif
 
         activeVSTWindows.add (this);
@@ -2075,9 +2642,9 @@ public:
 
        #if JUCE_MAC
         #if JUCE_SUPPORT_CARBON
-        carbonWrapper = nullptr;
+        carbonWrapper.reset();
         #endif
-        cocoaWrapper = nullptr;
+        cocoaWrapper.reset();
        #elif JUCE_LINUX
         display = XWindowSystem::getInstance()->displayUnref();
        #endif
@@ -2402,7 +2969,7 @@ private:
                 || ((w == 0 && rw > 0) || (h == 0 && rh > 0)))
             {
                 // very dodgy logic to decide which size is right.
-                if (abs (rw - w) > 350 || abs (rh - h) > 350)
+                if (std::abs (rw - w) > 350 || std::abs (rh - h) > 350)
                 {
                     SetWindowPos (pluginHWND, 0,
                                   0, 0, rw, rh,
@@ -2770,10 +3337,10 @@ void VSTPluginFormat::createPluginInstance (const PluginDescription& desc,
         {
             shellUIDToCreate = desc.uid;
 
-            result = VSTPluginInstance::create (module, sampleRate, blockSize);
+            result.reset (VSTPluginInstance::create (module, sampleRate, blockSize));
 
             if (result != nullptr && ! result->initialiseEffect (sampleRate, blockSize))
-                result = nullptr;
+                result.reset();
         }
 
         previousWorkingDirectory.setAsCurrentWorkingDirectory();
@@ -2933,9 +3500,13 @@ AudioPluginInstance* VSTPluginFormat::createCustomVSTFromMainCall (void* entryPo
     ModuleHandle::Ptr module = new ModuleHandle (File(), (MainCall) entryPointFunction);
 
     if (module->open())
-        if (ScopedPointer<VSTPluginInstance> result = VSTPluginInstance::create (module, initialSampleRate, initialBufferSize))
+    {
+        ScopedPointer<VSTPluginInstance> result (VSTPluginInstance::create (module, initialSampleRate, initialBufferSize));
+
+        if (result != nullptr)
             if (result->initialiseEffect (initialSampleRate, initialBufferSize))
                 return result.release();
+    }
 
     return nullptr;
 }
@@ -2945,7 +3516,7 @@ void VSTPluginFormat::setExtraFunctions (AudioPluginInstance* plugin, ExtraFunct
     ScopedPointer<ExtraFunctions> f (functions);
 
     if (auto* vst = dynamic_cast<VSTPluginInstance*> (plugin))
-        vst->extraFunctions = f;
+        std::swap (vst->extraFunctions, f);
 }
 
 AudioPluginInstance* VSTPluginFormat::getPluginInstanceFromVstEffectInterface (void* aEffect)

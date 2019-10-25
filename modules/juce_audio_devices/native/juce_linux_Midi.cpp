@@ -303,7 +303,7 @@ private:
     {
     public:
         MidiInputThread (AlsaClient& c)
-            : Thread ("Juce MIDI Input"), client (c), concatenator (2048)
+            : Thread ("JUCE MIDI Input"), client (c), concatenator (2048)
         {
             jassert (client.get() != nullptr);
         }
@@ -316,8 +316,8 @@ private:
 
             if (snd_midi_event_new (maxEventSize, &midiParser) >= 0)
             {
-                const int numPfds = snd_seq_poll_descriptors_count (seqHandle, POLLIN);
-                HeapBlock<pollfd> pfd ((size_t) numPfds);
+                auto numPfds = snd_seq_poll_descriptors_count (seqHandle, POLLIN);
+                HeapBlock<pollfd> pfd (numPfds);
                 snd_seq_poll_descriptors (seqHandle, pfd, (unsigned int) numPfds, POLLIN);
 
                 HeapBlock<uint8> buffer (maxEventSize);
@@ -390,7 +390,7 @@ static AlsaClient::Port* iterateMidiClient (const AlsaClient::Ptr& client,
     {
         if (snd_seq_query_next_port (seqHandle, portInfo) == 0
             && (snd_seq_port_info_get_capability (portInfo)
-                & (forInput ? SND_SEQ_PORT_CAP_SUBS_WRITE : SND_SEQ_PORT_CAP_SUBS_READ)) != 0)
+                & (forInput ? SND_SEQ_PORT_CAP_SUBS_READ : SND_SEQ_PORT_CAP_SUBS_WRITE)) != 0)
         {
             const String portName = snd_seq_port_info_get_name(portInfo);
 

@@ -30,10 +30,12 @@ import android.content.Intent;
 import android.content.res.Configuration;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.net.http.SslError;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Looper;
 import android.os.Handler;
+import android.os.Message;
 import android.os.ParcelUuid;
 import android.os.Environment;
 import android.view.*;
@@ -47,6 +49,13 @@ import android.text.InputType;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Pair;
+import android.webkit.SslErrorHandler;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import java.lang.Runnable;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.*;
@@ -1226,6 +1235,10 @@ public class AudioPerformanceTest   extends Activity
     {
         super.onResume();
         resumeApp();
+
+        // Ensure that navigation/status bar visibility is correctly restored.
+        for (int i = 0; i < viewHolder.getChildCount(); ++i)
+            ((ComponentPeerView) viewHolder.getChildAt (i)).appResumed();
     }
 
     @Override
@@ -1241,6 +1254,33 @@ public class AudioPerformanceTest   extends Activity
                    getApplicationInfo().dataDir);
     }
 
+    // Need to override this as the default implementation always finishes the activity.
+    @Override
+    public void onBackPressed()
+    {
+        ComponentPeerView focusedView = getViewWithFocusOrDefaultView();
+
+        if (focusedView == null)
+            return;
+
+        focusedView.backButtonPressed();
+    }
+
+    private ComponentPeerView getViewWithFocusOrDefaultView()
+    {
+        for (int i = 0; i < viewHolder.getChildCount(); ++i)
+        {
+            if (viewHolder.getChildAt (i).hasFocus())
+                return (ComponentPeerView) viewHolder.getChildAt (i);
+        }
+
+        if (viewHolder.getChildCount() > 0)
+            return (ComponentPeerView) viewHolder.getChildAt (0);
+
+        return null;
+    }
+
+    //==============================================================================
     private void hideActionBar()
     {
         // get "getActionBar" method
@@ -1312,6 +1352,7 @@ public class AudioPerformanceTest   extends Activity
     private native void resumeApp();
     private native void setScreenSize (int screenWidth, int screenHeight, int dpi);
     private native void appActivityResult (int requestCode, int resultCode, Intent data);
+    private native void appNewIntent (Intent intent);
 
     //==============================================================================
     private ViewHolder viewHolder;
@@ -1329,6 +1370,8 @@ public class AudioPerformanceTest   extends Activity
 
     public final void deleteView (ComponentPeerView view)
     {
+        view.host = 0;
+
         ViewGroup group = (ViewGroup) (view.getParent());
 
         if (group != null)
@@ -1558,7 +1601,6 @@ public class AudioPerformanceTest   extends Activity
             setFocusable (true);
             setFocusableInTouchMode (true);
             setOnFocusChangeListener (this);
-            requestFocus();
 
             // swap red and blue colours to match internal opengl texture format
             ColorMatrix colorMatrix = new ColorMatrix();
@@ -1570,6 +1612,27 @@ public class AudioPerformanceTest   extends Activity
 
             colorMatrix.set (colorTransform);
             paint.setColorFilter (new ColorMatrixColorFilter (colorMatrix));
+
+            java.lang.reflect.Method method = null;
+
+            try
+            {
+                method = getClass().getMethod ("setLayerType", int.class, Paint.class);
+            }
+            catch (SecurityException e)     {}
+            catch (NoSuchMethodException e) {}
+
+            if (method != null)
+            {
+                try
+                {
+                    int layerTypeNone = 0;
+                    method.invoke (this, layerTypeNone, null);
+                }
+                catch (java.lang.IllegalArgumentException e) {}
+                catch (java.lang.IllegalAccessException e) {}
+                catch (java.lang.reflect.InvocationTargetException e) {}
+            }
         }
 
         //==============================================================================
@@ -1578,6 +1641,9 @@ public class AudioPerformanceTest   extends Activity
         @Override
         public void onDraw (Canvas canvas)
         {
+            if (host == 0)
+                return;
+
             handlePaint (host, canvas, paint);
         }
 
@@ -1599,6 +1665,9 @@ public class AudioPerformanceTest   extends Activity
         @Override
         public boolean onTouchEvent (MotionEvent event)
         {
+            if (host == 0)
+                return false;
+
             int action = event.getAction();
             long time = event.getEventTime();
 
@@ -1647,6 +1716,7 @@ public class AudioPerformanceTest   extends Activity
         private native void handleKeyDown (long host, int keycode, int textchar);
         private native void handleKeyUp (long host, int keycode, int textchar);
         private native void handleBackButton (long host);
+        private native void handleKeyboardHidden (long host);
 
         public void showKeyboard (String type)
         {
@@ -1658,17 +1728,30 @@ public class AudioPerformanceTest   extends Activity
                 {
                     imm.showSoftInput (this, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
                     imm.setInputMethod (getWindowToken(), type);
+                    keyboardDismissListener.startListening();
                 }
                 else
                 {
                     imm.hideSoftInputFromWindow (getWindowToken(), 0);
+                    keyboardDismissListener.stopListening();
                 }
             }
+        }
+
+        public void backButtonPressed()
+        {
+            if (host == 0)
+                return;
+
+            handleBackButton (host);
         }
 
         @Override
         public boolean onKeyDown (int keyCode, KeyEvent event)
         {
+            if (host == 0)
+                return false;
+
             switch (keyCode)
             {
                 case KeyEvent.KEYCODE_VOLUME_UP:
@@ -1676,7 +1759,7 @@ public class AudioPerformanceTest   extends Activity
                     return super.onKeyDown (keyCode, event);
                 case KeyEvent.KEYCODE_BACK:
                 {
-                    handleBackButton (host);
+                    ((Activity) getContext()).onBackPressed();
                     return true;
                 }
 
@@ -1691,6 +1774,9 @@ public class AudioPerformanceTest   extends Activity
         @Override
         public boolean onKeyUp (int keyCode, KeyEvent event)
         {
+            if (host == 0)
+                return false;
+
             handleKeyUp (host, keyCode, event.getUnicodeChar());
             return true;
         }
@@ -1698,6 +1784,9 @@ public class AudioPerformanceTest   extends Activity
         @Override
         public boolean onKeyMultiple (int keyCode, int count, KeyEvent event)
         {
+            if (host == 0)
+                return false;
+
             if (keyCode != KeyEvent.KEYCODE_UNKNOWN || event.getAction() != KeyEvent.ACTION_MULTIPLE)
                 return super.onKeyMultiple (keyCode, count, event);
 
@@ -1710,6 +1799,47 @@ public class AudioPerformanceTest   extends Activity
 
             return false;
         }
+
+        //==============================================================================
+        private final class KeyboardDismissListener
+        {
+            public KeyboardDismissListener (ComponentPeerView viewToUse)
+            {
+                view = viewToUse;
+            }
+
+            private void startListening()
+            {
+                view.getViewTreeObserver().addOnGlobalLayoutListener(viewTreeObserver);
+            }
+
+            private void stopListening()
+            {
+                view.getViewTreeObserver().removeGlobalOnLayoutListener(viewTreeObserver);
+            }
+
+            private class TreeObserver implements ViewTreeObserver.OnGlobalLayoutListener
+            {
+                @Override
+                public void onGlobalLayout()
+                {
+                    Rect r = new Rect();
+
+                    view.getWindowVisibleDisplayFrame(r);
+
+                    int diff = view.getHeight() - (r.bottom - r.top);
+
+                    // Arbitrary threshold, surely keyboard would take more than 20 pix.
+                    if (diff < 20)
+                        handleKeyboardHidden (view.host);
+                };
+            };
+
+            private ComponentPeerView view;
+            private TreeObserver viewTreeObserver = new TreeObserver();
+        }
+
+        private KeyboardDismissListener keyboardDismissListener = new KeyboardDismissListener(this);
 
         // this is here to make keyboard entry work on a Galaxy Tab2 10.1
         @Override
@@ -1730,6 +1860,9 @@ public class AudioPerformanceTest   extends Activity
         @Override
         protected void onSizeChanged (int w, int h, int oldw, int oldh)
         {
+            if (host == 0)
+                return;
+
             super.onSizeChanged (w, h, oldw, oldh);
             viewSizeChanged (host);
         }
@@ -1746,6 +1879,9 @@ public class AudioPerformanceTest   extends Activity
         @Override
         public void onFocusChange (View v, boolean hasFocus)
         {
+            if (host == 0)
+                return;
+
             if (v == this)
                 focusChanged (host, hasFocus);
         }
@@ -1780,6 +1916,17 @@ public class AudioPerformanceTest   extends Activity
         public boolean containsPoint (int x, int y)
         {
             return true; //xxx needs to check overlapping views
+        }
+
+        //==============================================================================
+        private native void handleAppResumed (long host);
+
+        public void appResumed()
+        {
+            if (host == 0)
+                return;
+
+            handleAppResumed (host);
         }
     }
 
@@ -1900,15 +2047,29 @@ public class AudioPerformanceTest   extends Activity
     //==============================================================================
     public static class NativeInvocationHandler implements InvocationHandler
     {
-        public NativeInvocationHandler (long nativeContextRef)
+        public NativeInvocationHandler (Activity activityToUse, long nativeContextRef)
         {
+            activity = activityToUse;
             nativeContext = nativeContextRef;
+        }
+
+        public void nativeContextDeleted()
+        {
+            nativeContext = 0;
         }
 
         @Override
         public void finalize()
         {
-            dispatchFinalize (nativeContext);
+            activity.runOnUiThread (new Runnable()
+                                    {
+                                        @Override
+                                        public void run()
+                                        {
+                                            if (nativeContext != 0)
+                                                dispatchFinalize (nativeContext);
+                                        }
+                                    });
         }
 
         @Override
@@ -1918,15 +2079,21 @@ public class AudioPerformanceTest   extends Activity
         }
 
         //==============================================================================
+        Activity activity;
         private long nativeContext = 0;
 
         private native void dispatchFinalize (long nativeContextRef);
         private native Object dispatchInvoke (long nativeContextRef, Object proxy, Method method, Object[] args);
     }
 
-    public static InvocationHandler createInvocationHandler (long nativeContextRef)
+    public InvocationHandler createInvocationHandler (long nativeContextRef)
     {
-        return new NativeInvocationHandler (nativeContextRef);
+        return new NativeInvocationHandler (this, nativeContextRef);
+    }
+
+    public void invocationHandlerContextDeleted (InvocationHandler handler)
+    {
+        ((NativeInvocationHandler) handler).nativeContextDeleted();
     }
 
     //==============================================================================
@@ -2324,6 +2491,111 @@ public class AudioPerformanceTest   extends Activity
         startActivity (new Intent (Intent.ACTION_VIEW, Uri.parse (url)));
     }
 
+    private native boolean webViewPageLoadStarted (long host, WebView view, String url);
+    private native void webViewPageLoadFinished (long host, WebView view, String url);
+    private native void webViewReceivedError (long host, WebView view, WebResourceRequest request, WebResourceError error);    private native void webViewReceivedHttpError (long host, WebView view, WebResourceRequest request, WebResourceResponse errorResponse);    private native void webViewReceivedSslError (long host, WebView view, SslErrorHandler handler, SslError error);
+    private native void webViewCloseWindowRequest (long host, WebView view);
+    private native void webViewCreateWindowRequest (long host, WebView view);
+
+    //==============================================================================
+    public class JuceWebViewClient   extends WebViewClient
+    {
+        public JuceWebViewClient (long hostToUse)
+        {
+            host = hostToUse;
+        }
+
+        public void hostDeleted()
+        {
+            synchronized (hostLock)
+            {
+                host = 0;
+            }
+        }
+
+        @Override
+        public void onPageFinished (WebView view, String url)
+        {
+            if (host == 0)
+                return;
+
+            webViewPageLoadFinished (host, view, url);
+        }
+
+        @Override
+        public void onReceivedSslError (WebView view, SslErrorHandler handler, SslError error)
+        {
+            if (host == 0)
+                return;
+
+            webViewReceivedSslError (host, view, handler, error);
+        }
+
+        @Override
+        public void onReceivedError (WebView view, WebResourceRequest request, WebResourceError error)
+        {
+            if (host == 0)
+                return;
+
+            webViewReceivedError (host, view, request, error);
+        }
+
+        @Override
+        public void onReceivedHttpError (WebView view, WebResourceRequest request, WebResourceResponse errorResponse)
+        {
+            if (host == 0)
+                return;
+
+            webViewReceivedHttpError (host, view, request, errorResponse);
+        }
+
+        @Override
+        public WebResourceResponse shouldInterceptRequest (WebView view, WebResourceRequest request)
+        {
+            synchronized (hostLock)
+            {
+                if (host != 0)
+                {
+                    boolean shouldLoad = webViewPageLoadStarted (host, view, request.getUrl().toString());
+
+                    if (shouldLoad)
+                        return null;
+                }
+            }
+
+            return new WebResourceResponse ("text/html", null, null);
+        }
+
+        private long host;
+        private final Object hostLock = new Object();
+    }
+
+    public class JuceWebChromeClient    extends WebChromeClient
+    {
+        public JuceWebChromeClient (long hostToUse)
+        {
+            host = hostToUse;
+        }
+
+        @Override
+        public void onCloseWindow (WebView window)
+        {
+            webViewCloseWindowRequest (host, window);
+        }
+
+        @Override
+        public boolean onCreateWindow (WebView view, boolean isDialog,
+                                       boolean isUserGesture, Message resultMsg)
+        {
+            webViewCreateWindowRequest (host, view);
+            return false;
+        }
+
+        private long host;
+        private final Object hostLock = new Object();
+    }
+
+    //==============================================================================
     public static final String getLocaleValue (boolean isRegion)
     {
         java.util.Locale locale = java.util.Locale.getDefault();
@@ -2355,6 +2627,15 @@ public class AudioPerformanceTest   extends Activity
     protected void onActivityResult (int requestCode, int resultCode, Intent data)
     {
         appActivityResult (requestCode, resultCode, data);
+    }
+
+    @Override
+    protected void onNewIntent (Intent intent)
+    {
+        super.onNewIntent(intent);
+        setIntent(intent);
+
+        appNewIntent (intent);
     }
 
     //==============================================================================

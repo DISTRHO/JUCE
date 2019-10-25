@@ -38,8 +38,7 @@ public:
         : project (p),
           projectFile (file),
           generatedCodeFolder (project.getGeneratedCodeFolder()),
-          generatedFilesGroup (Project::Item::createGroup (project, getJuceCodeGroupName(), "__generatedcode__", true)),
-          hasBinaryData (false)
+          generatedFilesGroup (Project::Item::createGroup (project, getJuceCodeGroupName(), "__generatedcode__", true))
     {
         generatedFilesGroup.setID (getGeneratedGroupID());
     }
@@ -49,7 +48,7 @@ public:
     public:
         SaveThread (ProjectSaver& ps, bool wait, const String& exp)
             : ThreadWithProgressWindow ("Saving...", true, false),
-              saver (ps), result (Result::ok()),
+              saver (ps),
               shouldWaitAfterSaving (wait),
               specifiedExporterToSave (exp)
         {}
@@ -61,7 +60,7 @@ public:
         }
 
         ProjectSaver& saver;
-        Result result;
+        Result result = Result::ok();
         bool shouldWaitAfterSaving;
         String specifiedExporterToSave;
 
@@ -77,9 +76,9 @@ public:
             return thread.result;
         }
 
-        const String appConfigUserContent (loadUserContentFromAppConfig());
+        auto appConfigUserContent = loadUserContentFromAppConfig();
 
-        const File oldFile (project.getFile());
+        auto oldFile = project.getFile();
         project.setFile (projectFile);
 
         OwnedArray<LibraryModule> modules;
@@ -92,12 +91,21 @@ public:
             writeMainProjectFile();
             project.updateModificationTime();
 
+            auto projectRootHash = project.getProjectRoot().toXmlString().hashCode();
+
             writeAppConfigFile (modules, appConfigUserContent);
             writeBinaryDataFiles();
             writeAppHeader (modules);
             writeModuleCppWrappers (modules);
-            writeProjects (modules, specifiedExporterToSave);
+            writeProjects (modules, specifiedExporterToSave, ! showProgressBox);
             writeAppConfigFile (modules, appConfigUserContent); // (this is repeated in case the projects added anything to it)
+
+            // if the project root has changed after writing the other files then re-save it
+            if (project.getProjectRoot().toXmlString().hashCode() != projectRootHash)
+            {
+                writeMainProjectFile();
+                project.updateModificationTime();
+            }
 
             if (generatedCodeFolder.exists())
                 writeReadmeFile();
@@ -130,6 +138,32 @@ public:
         return Result::ok();
     }
 
+    Result saveContentNeededForLiveBuild()
+    {
+        OwnedArray<LibraryModule> modules;
+        project.getModules().createRequiredModules (modules);
+
+        checkModuleValidity (modules);
+
+        if (errors.size() == 0)
+        {
+            writeAppConfigFile (modules, loadUserContentFromAppConfig());
+            writeBinaryDataFiles();
+            writeAppHeader (modules);
+            writeModuleCppWrappers (modules);
+
+            if (project.getProjectType().isAudioPlugin())
+            {
+                writePluginCharacteristicsFile();
+                writeAppConfigFile (modules, loadUserContentFromAppConfig());
+            }
+
+            return Result::ok();
+        }
+
+        return Result::fail (errors[0]);
+    }
+
     Project::Item saveGeneratedFile (const String& filePath, const MemoryOutputStream& newData)
     {
         if (! generatedCodeFolder.createDirectory())
@@ -138,17 +172,17 @@ public:
             return Project::Item (project, ValueTree(), false);
         }
 
-        const File file (generatedCodeFolder.getChildFile (filePath));
+        auto file = generatedCodeFolder.getChildFile (filePath);
 
         if (replaceFileIfDifferent (file, newData))
             return addFileToGeneratedGroup (file);
 
-        return Project::Item (project, ValueTree(), true);
+        return { project, {}, true };
     }
 
     Project::Item addFileToGeneratedGroup (const File& file)
     {
-        Project::Item item (generatedFilesGroup.findItemForFile (file));
+        auto item = generatedFilesGroup.findItemForFile (file);
 
         if (item.isValid())
             return item;
@@ -173,7 +207,7 @@ public:
     static const char* getGeneratedGroupID() noexcept               { return "__jucelibfiles"; }
     Project::Item& getGeneratedCodeGroup()                          { return generatedFilesGroup; }
 
-    static String getJuceCodeGroupName()                            { return "Juce Library Code"; }
+    static String getJuceCodeGroupName()                            { return "JUCE Library Code"; }
 
     File getGeneratedCodeFolder() const                             { return generatedCodeFolder; }
 
@@ -199,30 +233,19 @@ public:
     {
         if (source.isDirectory() && dest.createDirectory())
         {
-            Array<File> subFiles;
-            source.findChildFiles (subFiles, File::findFiles, false);
-
-            for (int i = 0; i < subFiles.size(); ++i)
+            for (auto& f : source.findChildFiles (File::findFiles, false))
             {
-                const File f (subFiles.getReference(i));
-                const File target (dest.getChildFile (f.getFileName()));
+                auto target = dest.getChildFile (f.getFileName());
                 filesCreated.add (target);
 
                 if (! f.copyFileTo (target))
                     return false;
             }
 
-            Array<File> subFolders;
-            source.findChildFiles (subFolders, File::findDirectories, false);
-
-            for (int i = 0; i < subFolders.size(); ++i)
-            {
-                const File f (subFolders.getReference(i));
-
+            for (auto& f : source.findChildFiles (File::findDirectories, false))
                 if (! shouldFolderBeIgnoredWhenCopying (f))
                     if (! copyFolder (f, dest.getChildFile (f.getFileName())))
                         return false;
-            }
 
             return true;
         }
@@ -241,7 +264,7 @@ private:
     CriticalSection errorLock;
 
     File appConfigFile;
-    bool hasBinaryData;
+    bool hasBinaryData = false;
 
     // Recursively clears out any files in a folder that we didn't create, but avoids
     // any folders containing hidden files that might be used by version-control systems.
@@ -254,7 +277,7 @@ private:
         bool isFolder;
         while (i.next (&isFolder, nullptr, nullptr, nullptr, nullptr, nullptr))
         {
-            const File f (i.getFile());
+            auto f = i.getFile();
 
             if (filesCreated.contains (f) || shouldFileBeKept (f.getFileName()))
             {
@@ -317,10 +340,10 @@ private:
 
     String loadUserContentFromAppConfig() const
     {
-        StringArray lines, userContent;
-        lines.addLines (getAppConfigFile().loadFileAsString());
+        StringArray userContent;
         bool foundCodeSection = false;
 
+        auto lines = StringArray::fromLines (getAppConfigFile().loadFileAsString());
         for (int i = 0; i < lines.size(); ++i)
         {
             if (lines[i].contains ("[BEGIN_USER_CODE_SECTION]"))
@@ -335,9 +358,9 @@ private:
 
         if (! foundCodeSection)
         {
-            userContent.add (String());
+            userContent.add ({});
             userContent.add ("// (You can add your own code in this section, and the Projucer will not overwrite it)");
-            userContent.add (String());
+            userContent.add ({});
         }
 
         return userContent.joinIntoString (newLine) + newLine;
@@ -354,7 +377,7 @@ private:
 
         for (LibraryModule** moduleIter = modules.begin(); moduleIter != modules.end(); ++moduleIter)
         {
-            if (const LibraryModule* const module = *moduleIter)
+            if (auto* module = *moduleIter)
             {
                 if (! module->isValid())
                 {
@@ -400,11 +423,11 @@ private:
         out << newLine
             << "//==============================================================================" << newLine;
 
-        const int longestName = findLongestModuleName (modules);
+        auto longestName = findLongestModuleName (modules);
 
         for (int k = 0; k < modules.size(); ++k)
         {
-            LibraryModule* const m = modules.getUnchecked(k);
+            auto* m = modules.getUnchecked(k);
             out << "#define JUCE_MODULE_AVAILABLE_" << m->getID()
                 << String::repeatedString (" ", longestName + 5 - m->getID().length()) << " 1" << newLine;
         }
@@ -413,7 +436,7 @@ private:
 
         for (int j = 0; j < modules.size(); ++j)
         {
-            LibraryModule* const m = modules.getUnchecked(j);
+            auto* m = modules.getUnchecked(j);
             OwnedArray<Project::ConfigFlag> flags;
             m->getConfigFlags (project, flags);
 
@@ -423,35 +446,22 @@ private:
                     << "//==============================================================================" << newLine
                     << "// " << m->getID() << " flags:" << newLine;
 
-                for (int i = 0; i < flags.size(); ++i)
+                for (auto* flag : flags)
                 {
-                    flags.getUnchecked(i)->value.referTo (project.getConfigFlag (flags.getUnchecked(i)->symbol));
-
-                    const Project::ConfigFlag* const f = flags[i];
-                    const String value (project.getConfigFlag (f->symbol).toString());
-
                     out << newLine
-                        << "#ifndef    " << f->symbol << newLine;
-
-                    if (value == Project::configFlagEnabled)
-                        out << " #define   " << f->symbol << " 1";
-                    else if (value == Project::configFlagDisabled)
-                        out << " #define   " << f->symbol << " 0";
-                    else if (f->defaultValue.isEmpty())
-                        out << " //#define " << f->symbol << " 1";
-                    else
-                        out << " #define " << f->symbol << " " << f->defaultValue;
-
-
-                    out << newLine
-                        << "#endif" << newLine;
+                    << "#ifndef    " << flag->symbol
+                    << newLine
+                    << (flag->value.isUsingDefault() ? " //#define " : " #define   ") << flag->symbol << " " << (flag->value.get() ? "1" : "0")
+                    << newLine
+                    << "#endif"
+                    << newLine;
                 }
             }
         }
 
         {
             int isStandaloneApplication = 1;
-            const ProjectType& type = project.getProjectType();
+            auto& type = project.getProjectType();
 
             if (type.isAudioPlugin() || type.isDynamicLibrary())
                 isStandaloneApplication = 0;
@@ -505,7 +515,7 @@ private:
             out << newLine;
         }
 
-        if (hasBinaryData && project.shouldIncludeBinaryInAppConfig().getValue())
+        if (hasBinaryData && project.shouldIncludeBinaryInAppConfig())
             out << CodeHelpers::createIncludeStatement (project.getBinaryDataHeaderFile(), appConfigFile) << newLine;
 
         out << newLine
@@ -518,7 +528,7 @@ private:
             << "#if ! JUCE_DONT_DECLARE_PROJECTINFO" << newLine
             << "namespace ProjectInfo" << newLine
             << "{" << newLine
-            << "    const char* const  projectName    = " << CppTokeniserFunctions::addEscapeChars (project.getTitle()).quoted() << ";" << newLine
+            << "    const char* const  projectName    = " << CppTokeniserFunctions::addEscapeChars (project.getProjectNameString()).quoted() << ";" << newLine
             << "    const char* const  versionString  = " << CppTokeniserFunctions::addEscapeChars (project.getVersionString()).quoted() << ";" << newLine
             << "    const int          versionNumber  = " << project.getVersionAsHex() << ";" << newLine
             << "}" << newLine
@@ -559,13 +569,13 @@ private:
 
     void writeBinaryDataFiles()
     {
-        const File binaryDataH (project.getBinaryDataHeaderFile());
+        auto binaryDataH = project.getBinaryDataHeaderFile();
 
         ResourceFile resourceFile (project);
 
         if (resourceFile.getNumFiles() > 0)
         {
-            auto dataNamespace = project.binaryDataNamespace().toString().trim();
+            auto dataNamespace = project.getBinaryDataNamespaceString().trim();
             if (dataNamespace.isEmpty())
                 dataNamespace = "BinaryData";
 
@@ -573,11 +583,11 @@ private:
 
             Array<File> binaryDataFiles;
 
-            int maxSize = project.getMaxBinaryFileSize().getValue();
+            auto maxSize = project.getMaxBinaryFileSize();
             if (maxSize <= 0)
                 maxSize = 10 * 1024 * 1024;
 
-            Result r (resourceFile.write (binaryDataFiles, maxSize));
+            auto r = resourceFile.write (binaryDataFiles, maxSize);
 
             if (r.wasOk())
             {
@@ -585,7 +595,7 @@ private:
 
                 for (int i = 0; i < binaryDataFiles.size(); ++i)
                 {
-                    const File& f = binaryDataFiles.getReference(i);
+                    auto& f = binaryDataFiles.getReference(i);
 
                     filesCreated.add (f);
                     generatedFilesGroup.addFileRetainingSortOrder (f, ! f.hasFileExtension (".h"));
@@ -632,56 +642,21 @@ private:
 
     void writePluginCharacteristicsFile();
 
-    void writeProjects (const OwnedArray<LibraryModule>& modules, const String& specifiedExporterToSave)
+    void writeProjects (const OwnedArray<LibraryModule>&, const String&, bool);
+
+    void saveExporter (ProjectExporter* exporter, const OwnedArray<LibraryModule>& modules)
     {
-        ThreadPool threadPool;
-
-        // keep a copy of the basic generated files group, as each exporter may modify it.
-        const ValueTree originalGeneratedGroup (generatedFilesGroup.state.createCopy());
-
         try
         {
-            for (Project::ExporterIterator exporter (project); exporter.next();)
-            {
-                if (specifiedExporterToSave.isNotEmpty() && exporter->getName() != specifiedExporterToSave)
-                    continue;
+            exporter->create (modules);
 
-                exporter->initialiseDependencyPathValues();
-
-                if (exporter->getTargetFolder().createDirectory())
-                {
-                    exporter->copyMainGroupFromProject();
-                    exporter->settings = exporter->settings.createCopy();
-
-                    exporter->addToExtraSearchPaths (RelativePath ("JuceLibraryCode", RelativePath::projectFolder));
-
-                    generatedFilesGroup.state = originalGeneratedGroup.createCopy();
-                    exporter->addSettingsForProjectType (project.getProjectType());
-
-                    for (auto& module: modules)
-                        module->addSettingsForModuleToExporter (*exporter, *this);
-
-                    if (project.getProjectType().isAudioPlugin())
-                        writePluginCharacteristicsFile();
-
-                    generatedFilesGroup.sortAlphabetically (true, true);
-                    exporter->getAllGroups().add (generatedFilesGroup);
-
-                    threadPool.addJob (new ExporterJob (*this, exporter.exporter.release(), modules), true);
-                }
-                else
-                {
-                    addError ("Can't create folder: " + exporter->getTargetFolder().getFullPathName());
-                }
-            }
+            if (! exporter->isCLion())
+                std::cout << "Finished saving: " << exporter->getName() << std::endl;
         }
-        catch (ProjectExporter::SaveError& saveError)
+        catch (ProjectExporter::SaveError& error)
         {
-            addError (saveError.message);
+            addError (error.message);
         }
-
-        while (threadPool.getNumJobs() > 0)
-            Thread::sleep (10);
     }
 
     class ExporterJob   : public ThreadPoolJob
@@ -696,16 +671,7 @@ private:
 
         JobStatus runJob() override
         {
-            try
-            {
-                exporter->create (modules);
-                std::cout << "Finished saving: " << exporter->getName() << std::endl;
-            }
-            catch (ProjectExporter::SaveError& error)
-            {
-                owner.addError (error.message);
-            }
-
+            owner.saveExporter (exporter, modules);
             return jobHasFinished;
         }
 

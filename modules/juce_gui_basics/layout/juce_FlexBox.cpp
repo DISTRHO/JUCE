@@ -31,14 +31,14 @@ struct FlexBoxLayoutCalculation
 {
     using Coord = double;
 
-    FlexBoxLayoutCalculation (const FlexBox& fb, Coord w, Coord h)
+    FlexBoxLayoutCalculation (FlexBox& fb, Coord w, Coord h)
        : owner (fb), parentWidth (w), parentHeight (h), numItems (owner.items.size()),
          isRowDirection (fb.flexDirection == FlexBox::Direction::row
-                          || fb.flexDirection == FlexBox::Direction::rowReverse),
+                      || fb.flexDirection == FlexBox::Direction::rowReverse),
          containerLineLength (isRowDirection ? parentWidth : parentHeight)
     {
-        lineItems.calloc ((size_t) (numItems * numItems));
-        lineInfo.calloc ((size_t) numItems);
+        lineItems.calloc (numItems * numItems);
+        lineInfo.calloc (numItems);
     }
 
     struct ItemWithState
@@ -84,7 +84,7 @@ struct FlexBoxLayoutCalculation
         Coord crossSize, lineY, totalLength;
     };
 
-    const FlexBox& owner;
+    FlexBox& owner;
     const Coord parentWidth, parentHeight;
     const int numItems;
     const bool isRowDirection;
@@ -111,7 +111,8 @@ struct FlexBoxLayoutCalculation
         for (auto& item : owner.items)
             itemStates.add (item);
 
-        itemStates.sort (*this, true);
+        std::stable_sort (itemStates.begin(), itemStates.end(),
+                          [] (const ItemWithState& i1, const ItemWithState& i2)  { return i1.item->order < i2.item->order; });
 
         for (auto& item : itemStates)
         {
@@ -385,6 +386,8 @@ struct FlexBoxLayoutCalculation
 
                         if (isRowDirection)
                             item.setHeightChecked (lineSize - item.item->margin.top - item.item->margin.bottom);
+                        else
+                            item.setWidthChecked (lineSize - item.item->margin.left - item.item->margin.right);
                     }
                     else if (owner.alignItems == FlexBox::AlignItems::flexStart)
                     {
@@ -392,11 +395,17 @@ struct FlexBoxLayoutCalculation
                     }
                     else if (owner.alignItems == FlexBox::AlignItems::flexEnd)
                     {
-                        item.lockedMarginTop = lineSize - item.lockedHeight - item.item->margin.bottom;
+                        if (isRowDirection)
+                            item.lockedMarginTop = lineSize - item.lockedHeight - item.item->margin.bottom;
+                        else
+                            item.lockedMarginLeft = lineSize - item.lockedWidth - item.item->margin.right;
                     }
                     else if (owner.alignItems == FlexBox::AlignItems::center)
                     {
-                        item.lockedMarginTop = (lineSize - item.lockedHeight - item.item->margin.top - item.item->margin.bottom) / 2;
+                        if (isRowDirection)
+                            item.lockedMarginTop = (lineSize - item.lockedHeight - item.item->margin.top - item.item->margin.bottom) / 2;
+                        else
+                            item.lockedMarginLeft = (lineSize - item.lockedWidth - item.item->margin.left - item.item->margin.right) / 2;
                     }
                 }
             }
@@ -529,11 +538,6 @@ struct FlexBoxLayoutCalculation
 
         reverseLocations();
         reverseWrap();
-    }
-
-    static int compareElements (const ItemWithState& i1, const ItemWithState& i2) noexcept
-    {
-        return i1.item->order < i2.item->order ? -1 : (i2.item->order < i1.item->order ? 1 : 0);
     }
 
 private:
@@ -764,7 +768,8 @@ FlexBox::FlexBox (JustifyContent jc) noexcept  : justifyContent (jc) {}
 
 FlexBox::FlexBox (Direction d, Wrap w, AlignContent ac, AlignItems ai, JustifyContent jc) noexcept
     : flexDirection (d), flexWrap (w), alignContent (ac), alignItems (ai), justifyContent (jc)
-{}
+{
+}
 
 void FlexBox::performLayout (Rectangle<float> targetArea)
 {
@@ -789,16 +794,13 @@ void FlexBox::performLayout (Rectangle<float> targetArea)
         {
             item.currentBounds += targetArea.getPosition();
 
-            if (auto comp = item.associatedComponent)
-            {
-                auto position = item.currentBounds.getPosition().roundToInt();
-                comp->setBounds (position.getX(),
-                                 position.getY(),
-                                 roundToInt (item.currentBounds.getRight())  - position.getX(),
-                                 roundToInt (item.currentBounds.getBottom()) - position.getY());
-            }
+            if (auto* comp = item.associatedComponent)
+                comp->setBounds (Rectangle<int>::leftTopRightBottom ((int) item.currentBounds.getX(),
+                                                                     (int) item.currentBounds.getY(),
+                                                                     (int) item.currentBounds.getRight(),
+                                                                     (int) item.currentBounds.getBottom()));
 
-            if (auto box = item.associatedFlexBox)
+            if (auto* box = item.associatedFlexBox)
                 box->performLayout (item.currentBounds);
         }
     }

@@ -29,6 +29,8 @@ namespace juce
 
     The data that was written into the stream can then be accessed later as
     a contiguous block of memory.
+
+    @tags{Core}
 */
 class JUCE_API  MemoryOutputStream  : public OutputStream
 {
@@ -114,10 +116,10 @@ public:
 
 private:
     //==============================================================================
-    MemoryBlock* const blockToUse;
+    MemoryBlock* const blockToUse = nullptr;
     MemoryBlock internalBlock;
-    void* externalData;
-    size_t position, size, availableSize;
+    void* externalData = nullptr;
+    size_t position = 0, size = 0, availableSize = 0;
 
     void trimExternalBlockSize();
     char* prepareToWrite (size_t);

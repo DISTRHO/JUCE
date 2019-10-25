@@ -28,8 +28,10 @@ namespace juce
     Wraps a pointer to a null-terminated UTF-32 character string, and provides
     various methods to operate on the data.
     @see CharPointer_UTF8, CharPointer_UTF16
+
+    @tags{Core}
 */
-class CharPointer_UTF32
+class CharPointer_UTF32  final
 {
 public:
     typedef juce_wchar CharType;

@@ -135,14 +135,6 @@ namespace CodeHelpers
         return "#include \"" + includePath + "\"";
     }
 
-    String makeHeaderGuardName (const File& file)
-    {
-        return file.getFileName().toUpperCase()
-                                 .replaceCharacters (" .", "__")
-                                 .retainCharacters ("_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-                + "_INCLUDED";
-    }
-
     String makeBinaryDataIdentifierName (const File& file)
     {
         return makeValidIdentifier (file.getFileName()
@@ -159,12 +151,12 @@ namespace CodeHelpers
         StringArray lines;
 
         {
-            String::CharPointerType t (text.getCharPointer());
+            auto t = text.getCharPointer();
             bool finished = t.isEmpty();
 
             while (! finished)
             {
-                for (String::CharPointerType startOfLine (t);;)
+                for (auto startOfLine = t;;)
                 {
                     switch (t.getAndAdvance())
                     {
@@ -437,7 +429,7 @@ namespace CodeHelpers
     String getLeadingWhitespace (String line)
     {
         line = line.removeCharacters ("\r\n");
-        const String::CharPointerType endOfLeadingWS (line.getCharPointer().findEndOfWhitespace());
+        auto endOfLeadingWS = line.getCharPointer().findEndOfWhitespace();
         return String (line.getCharPointer(), endOfLeadingWS);
     }
 

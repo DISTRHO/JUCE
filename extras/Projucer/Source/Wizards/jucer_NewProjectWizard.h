@@ -32,7 +32,7 @@ static void setExecutableNameForAllTargets (Project& project, const String& exeN
 {
     for (Project::ExporterIterator exporter (project); exporter.next();)
         for (ProjectExporter::ConfigIterator config (*exporter); config.next();)
-            config->getTargetBinaryName() = exeName;
+            config->getValue (Ids::targetName) = exeName;
 }
 
 static Project::Item createSourceGroup (Project& project)
@@ -72,7 +72,7 @@ struct NewProjectWizard
 
     virtual StringArray getDefaultModules()
     {
-        static const char* mods[] =
+        return
         {
             "juce_core",
             "juce_events",
@@ -86,11 +86,8 @@ struct NewProjectWizard
             "juce_audio_basics",
             "juce_audio_devices",
             "juce_audio_formats",
-            "juce_audio_processors",
-            nullptr
+            "juce_audio_processors"
         };
-
-        return StringArray (mods);
     }
 
     String appTitle;
@@ -138,7 +135,6 @@ struct NewProjectWizard
         {
             project->setFile (projectFile);
             project->setTitle (appTitle);
-            project->getBundleIdentifier() = project->getDefaultBundleIdentifier();
 
             if (! initialiseProject (*project))
                 return nullptr;
@@ -161,6 +157,11 @@ struct NewProjectWizard
                                                 + failedFiles.joinIntoString ("\n", 0, 10));
             return nullptr;
         }
+
+        StringPairArray data;
+        data.set ("label", "Project Type = " + project->getProjectTypeString());
+
+        Analytics::getInstance()->logEvent ("Project Setting", data, ProjucerAnalyticsEvent::projectEvent);
 
         return project.release();
     }

@@ -27,17 +27,20 @@
 namespace juce
 {
 
+//==============================================================================
+JUCE_IMPLEMENT_SINGLETON (InAppPurchases)
+
 InAppPurchases::InAppPurchases()
-   #if JUCE_ANDROID || JUCE_IOS
+   #if JUCE_ANDROID || JUCE_IOS || JUCE_MAC
     : pimpl (new Pimpl (*this))
    #endif
 {}
 
-InAppPurchases::~InAppPurchases() {}
+InAppPurchases::~InAppPurchases() { clearSingletonInstance(); }
 
 bool InAppPurchases::isInAppPurchasesSupported() const
 {
-   #if JUCE_ANDROID || JUCE_IOS
+   #if JUCE_ANDROID || JUCE_IOS || JUCE_MAC
     return pimpl->isInAppPurchasesSupported();
    #else
     return false;
@@ -46,14 +49,14 @@ bool InAppPurchases::isInAppPurchasesSupported() const
 
 void InAppPurchases::getProductsInformation (const StringArray& productIdentifiers)
 {
-   #if JUCE_ANDROID || JUCE_IOS
+   #if JUCE_ANDROID || JUCE_IOS || JUCE_MAC
     pimpl->getProductsInformation (productIdentifiers);
    #else
     Array<Product> products;
     for (auto productId : productIdentifiers)
         products.add (Product { productId, {}, {}, {}, {}  });
 
-    listeners.call (&Listener::productsInfoReturned, products);
+    listeners.call ([&] (Listener& l) { l.productsInfoReturned (products); });
    #endif
 }
 
@@ -62,33 +65,33 @@ void InAppPurchases::purchaseProduct (const String& productIdentifier,
                                       const StringArray& upgradeProductIdentifiers,
                                       bool creditForUnusedSubscription)
 {
-   #if JUCE_ANDROID || JUCE_IOS
+   #if JUCE_ANDROID || JUCE_IOS || JUCE_MAC
     pimpl->purchaseProduct (productIdentifier, isSubscription,
                             upgradeProductIdentifiers, creditForUnusedSubscription);
    #else
     Listener::PurchaseInfo purchaseInfo { Purchase { "", productIdentifier, {}, {}, {} }, {} };
 
-    listeners.call (&Listener::productPurchaseFinished, purchaseInfo, false, "In-app purchases unavailable");
+    listeners.call ([&] (Listener& l) { l.productPurchaseFinished (purchaseInfo, false, "In-app purchases unavailable"); });
     ignoreUnused (isSubscription, upgradeProductIdentifiers, creditForUnusedSubscription);
    #endif
 }
 
 void InAppPurchases::restoreProductsBoughtList (bool includeDownloadInfo, const String& subscriptionsSharedSecret)
 {
-   #if JUCE_ANDROID || JUCE_IOS
+   #if JUCE_ANDROID || JUCE_IOS || JUCE_MAC
     pimpl->restoreProductsBoughtList (includeDownloadInfo, subscriptionsSharedSecret);
    #else
-    listeners.call (&Listener::purchasesListRestored, Array<Listener::PurchaseInfo>(), false, "In-app purchases unavailable");
+    listeners.call ([] (Listener& l) { l.purchasesListRestored ({}, false, "In-app purchases unavailable"); });
     ignoreUnused (includeDownloadInfo, subscriptionsSharedSecret);
    #endif
 }
 
 void InAppPurchases::consumePurchase (const String& productIdentifier, const String& purchaseToken)
 {
-   #if JUCE_ANDROID || JUCE_IOS
+   #if JUCE_ANDROID || JUCE_IOS || JUCE_MAC
     pimpl->consumePurchase (productIdentifier, purchaseToken);
    #else
-    listeners.call (&Listener::productConsumed, productIdentifier, false, "In-app purchases unavailable");
+    listeners.call ([&] (Listener& l) { l.productConsumed (productIdentifier, false, "In-app purchases unavailable"); });
     ignoreUnused (purchaseToken);
    #endif
 }
@@ -98,7 +101,7 @@ void InAppPurchases::removeListener (Listener* l)   { listeners.remove (l); }
 
 void InAppPurchases::startDownloads  (const Array<Download*>& downloads)
 {
-   #if JUCE_ANDROID || JUCE_IOS
+   #if JUCE_ANDROID || JUCE_IOS || JUCE_MAC
     pimpl->startDownloads (downloads);
    #else
     ignoreUnused (downloads);
@@ -107,7 +110,7 @@ void InAppPurchases::startDownloads  (const Array<Download*>& downloads)
 
 void InAppPurchases::pauseDownloads  (const Array<Download*>& downloads)
 {
-   #if JUCE_ANDROID || JUCE_IOS
+   #if JUCE_ANDROID || JUCE_IOS || JUCE_MAC
     pimpl->pauseDownloads (downloads);
    #else
     ignoreUnused (downloads);
@@ -116,7 +119,7 @@ void InAppPurchases::pauseDownloads  (const Array<Download*>& downloads)
 
 void InAppPurchases::resumeDownloads (const Array<Download*>& downloads)
 {
-   #if JUCE_ANDROID || JUCE_IOS
+   #if JUCE_ANDROID || JUCE_IOS || JUCE_MAC
     pimpl->resumeDownloads (downloads);
    #else
     ignoreUnused (downloads);
@@ -125,7 +128,7 @@ void InAppPurchases::resumeDownloads (const Array<Download*>& downloads)
 
 void InAppPurchases::cancelDownloads (const Array<Download*>& downloads)
 {
-   #if JUCE_ANDROID || JUCE_IOS
+   #if JUCE_ANDROID || JUCE_IOS || JUCE_MAC
     pimpl->cancelDownloads (downloads);
    #else
     ignoreUnused (downloads);

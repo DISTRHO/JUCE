@@ -145,7 +145,7 @@ struct CoreAudioFormatMetatdata
     //==============================================================================
     static StringPairArray parseMidiChunk (InputStream& input, int64 size)
     {
-        const int64 originalPosition = input.getPosition();
+        auto originalPosition = input.getPosition();
 
         MemoryBlock midiBlock;
         input.readIntoMemoryBlock (midiBlock, (ssize_t) size);
@@ -172,12 +172,12 @@ struct CoreAudioFormatMetatdata
         MidiMessageSequence tempoEvents;
         midiFile.findAllTempoEvents (tempoEvents);
 
-        const int numTempoEvents = tempoEvents.getNumEvents();
+        auto numTempoEvents = tempoEvents.getNumEvents();
         MemoryOutputStream tempoSequence;
 
         for (int i = 0; i < numTempoEvents; ++i)
         {
-            const double tempo = getTempoFromTempoMetaEvent (tempoEvents.getEventPointer (i));
+            auto tempo = getTempoFromTempoMetaEvent (tempoEvents.getEventPointer (i));
 
             if (tempo > 0.0)
             {
@@ -197,11 +197,11 @@ struct CoreAudioFormatMetatdata
     {
         if (holder != nullptr)
         {
-            const MidiMessage& midiMessage = holder->message;
+            auto& midiMessage = holder->message;
 
             if (midiMessage.isTempoMetaEvent())
             {
-                const double tempoSecondsPerQuarterNote = midiMessage.getTempoSecondsPerQuarterNote();
+                auto tempoSecondsPerQuarterNote = midiMessage.getTempoSecondsPerQuarterNote();
 
                 if (tempoSecondsPerQuarterNote > 0.0)
                     return 60.0 / tempoSecondsPerQuarterNote;
@@ -215,7 +215,7 @@ struct CoreAudioFormatMetatdata
     {
         MidiMessageSequence timeSigEvents;
         midiFile.findAllTimeSigEvents (timeSigEvents);
-        const int numTimeSigEvents = timeSigEvents.getNumEvents();
+        auto numTimeSigEvents = timeSigEvents.getNumEvents();
 
         MemoryOutputStream timeSigSequence;
 
@@ -242,15 +242,15 @@ struct CoreAudioFormatMetatdata
     {
         MidiMessageSequence keySigEvents;
         midiFile.findAllKeySigEvents (keySigEvents);
-        const int numKeySigEvents = keySigEvents.getNumEvents();
+        auto numKeySigEvents = keySigEvents.getNumEvents();
 
         MemoryOutputStream keySigSequence;
 
         for (int i = 0; i < numKeySigEvents; ++i)
         {
-            const MidiMessage& message (keySigEvents.getEventPointer (i)->message);
-            const int key = jlimit (0, 14, message.getKeySignatureNumberOfSharpsOrFlats() + 7);
-            const bool isMajor = message.isKeySignatureMajorKey();
+            auto& message (keySigEvents.getEventPointer (i)->message);
+            auto key = jlimit (0, 14, message.getKeySignatureNumberOfSharpsOrFlats() + 7);
+            bool isMajor = message.isKeySignatureMajorKey();
 
             static const char* majorKeys[] = { "Cb", "Gb", "Db", "Ab", "Eb", "Bb", "F", "C", "G", "D", "A", "E", "B", "F#", "C#" };
             static const char* minorKeys[] = { "Ab", "Eb", "Bb", "F", "C", "G", "D", "A", "E", "B", "F#", "C#", "G#", "D#", "A#" };
@@ -276,7 +276,7 @@ struct CoreAudioFormatMetatdata
     static StringPairArray parseInformationChunk (InputStream& input)
     {
         StringPairArray infoStrings;
-        const uint32 numEntries = (uint32) input.readIntBigEndian();
+        auto numEntries = (uint32) input.readIntBigEndian();
 
         for (uint32 i = 0; i < numEntries; ++i)
             infoStrings.set (input.readString(), input.readString());
@@ -287,7 +287,7 @@ struct CoreAudioFormatMetatdata
     //==============================================================================
     static bool read (InputStream& input, StringPairArray& metadataValues)
     {
-        const int64 originalPos = input.getPosition();
+        auto originalPos = input.getPosition();
 
         const FileHeader cafFileHeader (input);
         const bool isCafFile = cafFileHeader.fileType == chunkName ("caff");
@@ -342,9 +342,7 @@ struct CoreAudioFormatMetatdata
 class CoreAudioReader : public AudioFormatReader
 {
 public:
-    CoreAudioReader (InputStream* const inp)
-        : AudioFormatReader (inp, coreAudioFormatName),
-          ok (false), lastReadPosition (0)
+    CoreAudioReader (InputStream* inp)  : AudioFormatReader (inp, coreAudioFormatName)
     {
         usesFloatingPointData = true;
         bitsPerSample = 32;
@@ -387,7 +385,7 @@ public:
 
                 status = AudioFileGetPropertyInfo (audioFileID, kAudioFilePropertyChannelLayout, &sizeOfLayout, &isWritable);
 
-                if (status == noErr)
+                if (status == noErr && sizeOfLayout >= (sizeof (AudioChannelLayout) - sizeof (AudioChannelDescription)))
                 {
                     caLayout.malloc (1, static_cast<size_t> (sizeOfLayout));
 
@@ -476,11 +474,11 @@ public:
 
         while (numSamples > 0)
         {
-            const int numThisTime = jmin (8192, numSamples);
-            const size_t numBytes = sizeof (float) * (size_t) numThisTime;
+            auto numThisTime = jmin (8192, numSamples);
+            auto numBytes = sizeof (float) * (size_t) numThisTime;
 
             audioDataBlock.ensureSize (numBytes * numChannels, false);
-            float* data = static_cast<float*> (audioDataBlock.getData());
+            auto* data = static_cast<float*> (audioDataBlock.getData());
 
             for (int j = (int) numChannels; --j >= 0;)
             {
@@ -490,14 +488,15 @@ public:
                 data += numThisTime;
             }
 
-            UInt32 numFramesToRead = (UInt32) numThisTime;
-            OSStatus status = ExtAudioFileRead (audioFileRef, &numFramesToRead, bufferList);
+            auto numFramesToRead = (UInt32) numThisTime;
+            auto status = ExtAudioFileRead (audioFileRef, &numFramesToRead, bufferList);
+
             if (status != noErr)
                 return false;
 
             for (int i = numDestChannels; --i >= 0;)
             {
-                int* dest = destSamples[(i < (int) numChannels ? channelMap[i] : i)];
+                auto* dest = destSamples[(i < (int) numChannels ? channelMap[i] : i)];
 
                 if (dest != nullptr)
                 {
@@ -518,12 +517,13 @@ public:
 
     AudioChannelSet getChannelLayout() override
     {
-        if (channelSet.size() == static_cast<int> (numChannels)) return channelSet;
+        if (channelSet.size() == static_cast<int> (numChannels))
+            return channelSet;
 
         return AudioFormatReader::getChannelLayout();
     }
 
-    bool ok;
+    bool ok = false;
 
 private:
     AudioFileID audioFileID;
@@ -532,7 +532,7 @@ private:
     AudioStreamBasicDescription destinationAudioFormat;
     MemoryBlock audioDataBlock;
     HeapBlock<AudioBufferList> bufferList;
-    int64 lastReadPosition;
+    int64 lastReadPosition = 0;
     HeapBlock<int> channelMap;
 
     static SInt64 getSizeCallback (void* inClientData)
@@ -540,17 +540,12 @@ private:
         return static_cast<CoreAudioReader*> (inClientData)->input->getTotalLength();
     }
 
-    static OSStatus readCallback (void* inClientData,
-                                  SInt64 inPosition,
-                                  UInt32 requestCount,
-                                  void* buffer,
-                                  UInt32* actualCount)
+    static OSStatus readCallback (void* inClientData, SInt64 inPosition, UInt32 requestCount,
+                                  void* buffer, UInt32* actualCount)
     {
-        CoreAudioReader* const reader = static_cast<CoreAudioReader*> (inClientData);
-
+        auto* reader = static_cast<CoreAudioReader*> (inClientData);
         reader->input->setPosition (inPosition);
         *actualCount = (UInt32) reader->input->read (buffer, (int) requestCount);
-
         return noErr;
     }
 
@@ -565,8 +560,8 @@ CoreAudioFormat::CoreAudioFormat()
 
 CoreAudioFormat::~CoreAudioFormat() {}
 
-Array<int> CoreAudioFormat::getPossibleSampleRates()    { return Array<int>(); }
-Array<int> CoreAudioFormat::getPossibleBitDepths()      { return Array<int>(); }
+Array<int> CoreAudioFormat::getPossibleSampleRates()    { return {}; }
+Array<int> CoreAudioFormat::getPossibleBitDepths()      { return {}; }
 
 bool CoreAudioFormat::canDoStereo()     { return true; }
 bool CoreAudioFormat::canDoMono()       { return true; }
@@ -610,6 +605,17 @@ class CoreAudioLayoutsUnitTest  : public UnitTest
 public:
     CoreAudioLayoutsUnitTest() : UnitTest ("Core Audio Layout <-> JUCE channel layout conversion", "Audio") {}
 
+    // some ambisonic tags which are not explicitely defined
+    enum
+    {
+        kAudioChannelLayoutTag_HOA_ACN_SN3D_0Order = (190U<<16) | 1,
+        kAudioChannelLayoutTag_HOA_ACN_SN3D_1Order = (190U<<16) | 4,
+        kAudioChannelLayoutTag_HOA_ACN_SN3D_2Order = (190U<<16) | 9,
+        kAudioChannelLayoutTag_HOA_ACN_SN3D_3Order = (190U<<16) | 16,
+        kAudioChannelLayoutTag_HOA_ACN_SN3D_4Order = (190U<<16) | 25,
+        kAudioChannelLayoutTag_HOA_ACN_SN3D_5Order = (190U<<16) | 36
+    };
+
     void runTest() override
     {
         auto& knownTags = getAllKnownLayoutTags();
@@ -624,7 +630,7 @@ public:
             {
                 auto labels = CoreAudioLayouts::fromCoreAudio (tagEntry.tag);
 
-                expect (! labels.isDiscreteLayout(), String ("Tag \"") + String (tagEntry.name) + "\" is not handled by JUCE");
+                expect (! labels.isDiscreteLayout(), "Tag \"" + String (tagEntry.name) + "\" is not handled by JUCE");
             }
         }
 
@@ -635,7 +641,7 @@ public:
             {
                 auto labels = CoreAudioLayouts::getSpeakerLayoutForCoreAudioTag (tagEntry.tag);
 
-                expect (labels.size() == (tagEntry.tag & 0xffff), String ("Tag \"") + String (tagEntry.name) + "\" has incorrect channel count");
+                expect (labels.size() == (tagEntry.tag & 0xffff), "Tag \"" + String (tagEntry.name) + "\" has incorrect channel count");
             }
         }
 
@@ -649,7 +655,7 @@ public:
 
                 for (int i = 0; i < (labels.size() - 1); ++i)
                     expect (labels.getReference (i) != labels.getReference (i + 1),
-                            String ("Tag \"") + String (tagEntry.name) + "\" has the same speaker twice");
+                            "Tag \"" + String (tagEntry.name) + "\" has the same speaker twice");
             }
         }
 
@@ -659,7 +665,7 @@ public:
             for (auto tagEntry : knownTags)
                 expect (AudioChannelSet::channelSetWithChannels (CoreAudioLayouts::getSpeakerLayoutForCoreAudioTag (tagEntry.tag))
                             == CoreAudioLayouts::fromCoreAudio (tagEntry.tag),
-                        String ("Tag \"") + String (tagEntry.name) + "\" is not converted consistantly by JUCE");
+                        "Tag \"" + String (tagEntry.name) + "\" is not converted consistantly by JUCE");
         }
 
         {
@@ -671,7 +677,7 @@ public:
                     continue;
 
                 expect (CoreAudioLayouts::fromCoreAudio (tagEntry.tag) == tagEntry.equivalentChannelSet,
-                        String ("Documentation for tag \"") + String (tagEntry.name) + "\" is incorrect");
+                        "Documentation for tag \"" + String (tagEntry.name) + "\" is incorrect");
             }
         }
 
@@ -684,7 +690,7 @@ public:
                     continue;
 
                 expect (CoreAudioLayouts::toCoreAudio (tagEntry.equivalentChannelSet) == tagEntry.tag,
-                        String ("Incorrect reverse conversion for tag \"") + String (tagEntry.name) + "\"");
+                        "Incorrect reverse conversion for tag \"" + String (tagEntry.name) + "\"");
             }
         }
     }
@@ -708,7 +714,7 @@ private:
             DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_MidSide),
             DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_XY),
             DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_Binaural),
-            DEFINE_CHANNEL_LAYOUT_TAG_ENTRY (kAudioChannelLayoutTag_Ambisonic_B_Format, AudioChannelSet::ambisonic()),
+            DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_Ambisonic_B_Format),
             DEFINE_CHANNEL_LAYOUT_TAG_ENTRY (kAudioChannelLayoutTag_Quadraphonic, AudioChannelSet::quadraphonic()),
             DEFINE_CHANNEL_LAYOUT_TAG_ENTRY (kAudioChannelLayoutTag_Pentagonal, AudioChannelSet::pentagonal()),
             DEFINE_CHANNEL_LAYOUT_TAG_ENTRY (kAudioChannelLayoutTag_Hexagonal, AudioChannelSet::hexagonal()),
@@ -789,7 +795,7 @@ private:
             DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_AAC_7_1_C),
             DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_AAC_Octagonal),
             DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_TMH_10_2_std),
-            // DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_TMH_10_2_full), no indicatoin on how to handle this tag
+            // DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_TMH_10_2_full), no indication on how to handle this tag
             DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_AC3_1_0_1),
             DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_AC3_3_0),
             DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_AC3_3_1),
@@ -823,7 +829,14 @@ private:
             DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_DTS_8_0_B),
             DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_DTS_8_1_A),
             DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_DTS_8_1_B),
-            DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_DTS_6_1_D)
+            DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_DTS_6_1_D),
+            DEFINE_CHANNEL_LAYOUT_DFL_ENTRY (kAudioChannelLayoutTag_DTS_6_1_D),
+            DEFINE_CHANNEL_LAYOUT_TAG_ENTRY (kAudioChannelLayoutTag_HOA_ACN_SN3D_0Order,  AudioChannelSet::ambisonic (0)),
+            DEFINE_CHANNEL_LAYOUT_TAG_ENTRY (kAudioChannelLayoutTag_HOA_ACN_SN3D_1Order,  AudioChannelSet::ambisonic (1)),
+            DEFINE_CHANNEL_LAYOUT_TAG_ENTRY (kAudioChannelLayoutTag_HOA_ACN_SN3D_2Order,  AudioChannelSet::ambisonic (2)),
+            DEFINE_CHANNEL_LAYOUT_TAG_ENTRY (kAudioChannelLayoutTag_HOA_ACN_SN3D_3Order, AudioChannelSet::ambisonic (3)),
+            DEFINE_CHANNEL_LAYOUT_TAG_ENTRY (kAudioChannelLayoutTag_HOA_ACN_SN3D_4Order, AudioChannelSet::ambisonic (4)),
+            DEFINE_CHANNEL_LAYOUT_TAG_ENTRY (kAudioChannelLayoutTag_HOA_ACN_SN3D_5Order, AudioChannelSet::ambisonic (5))
         };
         static Array<CoreAudioChannelLayoutTag> knownTags (tags, sizeof (tags) / sizeof (CoreAudioChannelLayoutTag));
 

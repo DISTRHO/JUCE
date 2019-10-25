@@ -76,7 +76,7 @@ struct AudioVisualiserComponent::ChannelInfo
     }
 
     AudioVisualiserComponent& owner;
-    Array<Range<float> > levels;
+    Array<Range<float>> levels;
     Range<float> value;
     int nextSample, subSample;
 
@@ -129,7 +129,7 @@ void AudioVisualiserComponent::pushBuffer (const float** d, int numChannels, int
         channels.getUnchecked(i)->pushSamples (d[i], num);
 }
 
-void AudioVisualiserComponent::pushBuffer (const AudioSampleBuffer& buffer)
+void AudioVisualiserComponent::pushBuffer (const AudioBuffer<float>& buffer)
 {
     pushBuffer (buffer.getArrayOfReadPointers(),
                 buffer.getNumChannels(),

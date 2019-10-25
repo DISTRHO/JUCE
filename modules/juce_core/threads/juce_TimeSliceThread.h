@@ -37,6 +37,8 @@ class TimeSliceThread;
     deleting your client!
 
     @see TimeSliceThread
+
+    @tags{Core}
 */
 class JUCE_API  TimeSliceClient
 {
@@ -74,6 +76,8 @@ private:
     all a chance to run some sort of short task.
 
     @see TimeSliceClient, Thread
+
+    @tags{Core}
 */
 class JUCE_API  TimeSliceThread   : public Thread
 {
@@ -135,7 +139,7 @@ public:
     //==============================================================================
 private:
     CriticalSection callbackLock, listLock;
-    Array <TimeSliceClient*> clients;
+    Array<TimeSliceClient*> clients;
     TimeSliceClient* clientBeingCalled = nullptr;
 
     TimeSliceClient* getNextClient (int index) const;

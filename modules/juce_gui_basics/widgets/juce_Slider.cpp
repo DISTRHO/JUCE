@@ -29,8 +29,6 @@ namespace juce
 
 class Slider::Pimpl   : public AsyncUpdater, // this needs to be public otherwise it will cause an
                                              // error when JUCE_DLL_BUILD=1
-                        private Button::Listener,
-                        private Label::Listener,
                         private Value::Listener
 {
 public:
@@ -39,8 +37,8 @@ public:
         style (sliderStyle),
         textBoxPos (textBoxPosition)
     {
-        rotaryParams.startAngleRadians = float_Pi * 1.2f;
-        rotaryParams.endAngleRadians   = float_Pi * 2.8f;
+        rotaryParams.startAngleRadians = MathConstants<float>::pi * 1.2f;
+        rotaryParams.endAngleRadians   = MathConstants<float>::pi * 2.8f;
         rotaryParams.stopAtEnd = true;
     }
 
@@ -49,7 +47,7 @@ public:
         currentValue.removeListener (this);
         valueMin.removeListener (this);
         valueMax.removeListener (this);
-        popupDisplay = nullptr;
+        popupDisplay.reset();
     }
 
     //==============================================================================
@@ -96,7 +94,7 @@ public:
                 || (incDecButtonMode == incDecButtonsDraggable_AutoDirection && incDecButtonsSideBySide);
     }
 
-    float getPositionOfValue (const double value) const
+    float getPositionOfValue (double value) const
     {
         if (isHorizontal() || isVertical())
             return getLinearSliderPos (value);
@@ -105,45 +103,47 @@ public:
         return 0.0f;
     }
 
-    void setRange (const double newMin, const double newMax, const double newInt)
+    void updateRange()
     {
-        if (minimum != newMin || maximum != newMax || interval != newInt)
+        // figure out the number of DPs needed to display all values at this
+        // interval setting.
+        numDecimalPlaces = 7;
+
+        if (normRange.interval != 0.0)
         {
-            minimum = newMin;
-            maximum = newMax;
-            interval = newInt;
+            int v = std::abs (roundToInt (normRange.interval * 10000000));
 
-            // figure out the number of DPs needed to display all values at this
-            // interval setting.
-            numDecimalPlaces = 7;
-
-            if (newInt != 0.0)
+            while ((v % 10) == 0)
             {
-                int v = std::abs (roundToInt (newInt * 10000000));
-
-                if (v > 0)
-                {
-                    while ((v % 10) == 0)
-                    {
-                        --numDecimalPlaces;
-                        v /= 10;
-                    }
-                }
+                --numDecimalPlaces;
+                v /= 10;
             }
-
-            // keep the current values inside the new range..
-            if (style != TwoValueHorizontal && style != TwoValueVertical)
-            {
-                setValue (getValue(), dontSendNotification);
-            }
-            else
-            {
-                setMinValue (getMinValue(), dontSendNotification, false);
-                setMaxValue (getMaxValue(), dontSendNotification, false);
-            }
-
-            updateText();
         }
+
+        // keep the current values inside the new range..
+        if (style != TwoValueHorizontal && style != TwoValueVertical)
+        {
+            setValue (getValue(), dontSendNotification);
+        }
+        else
+        {
+            setMinValue (getMinValue(), dontSendNotification, false);
+            setMaxValue (getMaxValue(), dontSendNotification, false);
+        }
+
+        updateText();
+    }
+
+    void setRange (double newMin, double newMax, double newInt)
+    {
+        normRange = NormalisableRange<double> (newMin, newMax, newInt);
+        updateRange();
+    }
+
+    void setNormalisableRange (NormalisableRange<double> newRange)
+    {
+        normRange = newRange;
+        updateRange();
     }
 
     double getValue() const
@@ -155,7 +155,7 @@ public:
         return currentValue.getValue();
     }
 
-    void setValue (double newValue, const NotificationType notification)
+    void setValue (double newValue, NotificationType notification)
     {
         // for a two-value style slider, you should use the setMinValue() and setMaxValue()
         // methods to set the two values.
@@ -192,8 +192,7 @@ public:
         }
     }
 
-    void setMinValue (double newValue, const NotificationType notification,
-                      const bool allowNudgingOfOtherValues)
+    void setMinValue (double newValue, NotificationType notification, bool allowNudgingOfOtherValues)
     {
         // The minimum value only applies to sliders that are in two- or three-value mode.
         jassert (style == TwoValueHorizontal || style == TwoValueVertical
@@ -227,8 +226,7 @@ public:
         }
     }
 
-    void setMaxValue (double newValue, const NotificationType notification,
-                      const bool allowNudgingOfOtherValues)
+    void setMaxValue (double newValue, NotificationType notification, bool allowNudgingOfOtherValues)
     {
         // The maximum value only applies to sliders that are in two- or three-value mode.
         jassert (style == TwoValueHorizontal || style == TwoValueVertical
@@ -262,7 +260,7 @@ public:
         }
     }
 
-    void setMinAndMaxValues (double newMinValue, double newMaxValue, const NotificationType notification)
+    void setMinAndMaxValues (double newMinValue, double newMaxValue, NotificationType notification)
     {
         // The maximum value only applies to sliders that are in two- or three-value mode.
         jassert (style == TwoValueHorizontal || style == TwoValueVertical
@@ -304,7 +302,7 @@ public:
         return valueMax.getValue();
     }
 
-    void triggerChangeMessage (const NotificationType notification)
+    void triggerChangeMessage (NotificationType notification)
     {
         if (notification != dontSendNotification)
         {
@@ -322,8 +320,13 @@ public:
         cancelPendingUpdate();
 
         Component::BailOutChecker checker (&owner);
-        Slider* slider = &owner; // (must use an intermediate variable here to avoid a VS2005 compiler bug)
-        listeners.callChecked (checker, &Slider::Listener::sliderValueChanged, slider);
+        listeners.callChecked (checker, [&] (Slider::Listener& l) { l.sliderValueChanged (&owner); });
+
+        if (checker.shouldBailOut())
+            return;
+
+        if (owner.onValueChange != nullptr)
+            owner.onValueChange();
     }
 
     void sendDragStart()
@@ -331,19 +334,28 @@ public:
         owner.startedDragging();
 
         Component::BailOutChecker checker (&owner);
-        Slider* slider = &owner; // (must use an intermediate variable here to avoid a VS2005 compiler bug)
-        listeners.callChecked (checker, &Slider::Listener::sliderDragStarted, slider);
+        listeners.callChecked (checker, [&] (Slider::Listener& l) { l.sliderDragStarted (&owner); });
+
+        if (checker.shouldBailOut())
+            return;
+
+        if (owner.onDragStart != nullptr)
+            owner.onDragStart();
     }
 
     void sendDragEnd()
     {
         owner.stoppedDragging();
-
         sliderBeingDragged = -1;
 
         Component::BailOutChecker checker (&owner);
-        Slider* slider = &owner; // (must use an intermediate variable here to avoid a VS2005 compiler bug)
-        listeners.callChecked (checker, &Slider::Listener::sliderDragEnded, slider);
+        listeners.callChecked (checker, [&] (Slider::Listener& l) { l.sliderDragEnded (&owner); });
+
+        if (checker.shouldBailOut())
+            return;
+
+        if (owner.onDragEnd != nullptr)
+            owner.onDragEnd();
     }
 
     struct DragInProgress
@@ -356,11 +368,10 @@ public:
         JUCE_DECLARE_NON_COPYABLE (DragInProgress)
     };
 
-    void buttonClicked (Button* button) override
+    void incrementOrDecrement (double delta)
     {
         if (style == IncDecButtons)
         {
-            const double delta = (button == incButton) ? interval : -interval;
             auto newValue = owner.snapValue (getValue() + delta, notDragging);
 
             if (currentDrag != nullptr)
@@ -388,9 +399,9 @@ public:
             setMaxValue (valueMax.getValue(), dontSendNotification, true);
     }
 
-    void labelTextChanged (Label* label) override
+    void textChanged()
     {
-        const double newValue = owner.snapValue (owner.getValueFromText (label->getText()), notDragging);
+        auto newValue = owner.snapValue (owner.getValueFromText (valueBox->getText()), notDragging);
 
         if (newValue != static_cast<double> (currentValue.getValue()))
         {
@@ -405,7 +416,7 @@ public:
     {
         if (valueBox != nullptr)
         {
-            String newValue (owner.getTextFromValue (currentValue.getValue()));
+            auto newValue = owner.getTextFromValue (currentValue.getValue());
 
             if (newValue != valueBox->getText())
                 valueBox->setText (newValue, dontSendNotification);
@@ -414,26 +425,18 @@ public:
 
     double constrainedValue (double value) const
     {
-        if (interval > 0)
-            value = minimum + interval * std::floor ((value - minimum) / interval + 0.5);
-
-        if (value <= minimum || maximum <= minimum)
-            value = minimum;
-        else if (value >= maximum)
-            value = maximum;
-
-        return value;
+        return normRange.snapToLegalValue (value);
     }
 
-    float getLinearSliderPos (const double value) const
+    float getLinearSliderPos (double value) const
     {
         double pos;
 
-        if (maximum <= minimum)
+        if (normRange.end <= normRange.start)
             pos = 0.5;
-        else if (value < minimum)
+        else if (value < normRange.start)
             pos = 0.0;
-        else if (value > maximum)
+        else if (value > normRange.end)
             pos = 1.0;
         else
             pos = owner.valueToProportionOfLength (value);
@@ -445,7 +448,7 @@ public:
         return (float) (sliderRegionStart + pos * sliderRegionSize);
     }
 
-    void setSliderStyle (const SliderStyle newStyle)
+    void setSliderStyle (SliderStyle newStyle)
     {
         if (style != newStyle)
         {
@@ -455,23 +458,18 @@ public:
         }
     }
 
-    void setVelocityModeParameters (const double sensitivity, const int threshold,
-                                    const double offset, const bool userCanPressKeyToSwapMode)
+    void setVelocityModeParameters (double sensitivity, int threshold,
+                                    double offset, bool userCanPressKeyToSwapMode,
+                                    ModifierKeys::Flags newModifierToSwapModes)
     {
         velocityModeSensitivity = sensitivity;
         velocityModeOffset = offset;
         velocityModeThreshold = threshold;
         userKeyOverridesVelocity = userCanPressKeyToSwapMode;
+        modifierToSwapModes = newModifierToSwapModes;
     }
 
-    void setSkewFactorFromMidPoint (const double sliderValueToShowAtMidPoint)
-    {
-        if (maximum > minimum)
-            skewFactor = std::log (0.5) / std::log ((sliderValueToShowAtMidPoint - minimum)
-                                        / (maximum - minimum));
-    }
-
-    void setIncDecButtonsMode (const IncDecButtonMode mode)
+    void setIncDecButtonsMode (IncDecButtonMode mode)
     {
         if (incDecButtonMode != mode)
         {
@@ -480,10 +478,10 @@ public:
         }
     }
 
-    void setTextBoxStyle (const TextEntryBoxPosition newPosition,
-                          const bool isReadOnly,
-                          const int textEntryBoxWidth,
-                          const int textEntryBoxHeight)
+    void setTextBoxStyle (TextEntryBoxPosition newPosition,
+                          bool isReadOnly,
+                          int textEntryBoxWidth,
+                          int textEntryBoxHeight)
     {
         if (textBoxPos != newPosition
              || editableText != (! isReadOnly)
@@ -500,7 +498,7 @@ public:
         }
     }
 
-    void setTextBoxIsEditable (const bool shouldBeEditable)
+    void setTextBoxIsEditable (bool shouldBeEditable)
     {
         editableText = shouldBeEditable;
         updateTextBoxEnablement();
@@ -514,7 +512,7 @@ public:
             valueBox->showEditor();
     }
 
-    void hideTextBox (const bool discardCurrentEditorContents)
+    void hideTextBox (bool discardCurrentEditorContents)
     {
         if (valueBox != nullptr)
         {
@@ -538,7 +536,7 @@ public:
     {
         if (valueBox != nullptr)
         {
-            const bool shouldBeEditable = editableText && owner.isEnabled();
+            bool shouldBeEditable = editableText && owner.isEnabled();
 
             if (valueBox->isEditable() != shouldBeEditable) // (to avoid changing the single/double click flags unless we need to)
                 valueBox->setEditable (shouldBeEditable);
@@ -549,17 +547,18 @@ public:
     {
         if (textBoxPos != NoTextBox)
         {
-            const String previousTextBoxContent (valueBox != nullptr ? valueBox->getText()
-                                                                     : owner.getTextFromValue (currentValue.getValue()));
+            auto previousTextBoxContent = (valueBox != nullptr ? valueBox->getText()
+                                                               : owner.getTextFromValue (currentValue.getValue()));
 
-            valueBox = nullptr;
-            owner.addAndMakeVisible (valueBox = lf.createSliderTextBox (owner));
+            valueBox.reset();
+            valueBox.reset (lf.createSliderTextBox (owner));
+            owner.addAndMakeVisible (valueBox.get());
 
             valueBox->setWantsKeyboardFocus (false);
             valueBox->setText (previousTextBoxContent, dontSendNotification);
             valueBox->setTooltip (owner.getTooltip());
             updateTextBoxEnablement();
-            valueBox->addListener (this);
+            valueBox->onTextChange = [this] { textChanged(); };
 
             if (style == LinearBar || style == LinearBarVertical)
             {
@@ -569,16 +568,19 @@ public:
         }
         else
         {
-            valueBox = nullptr;
+            valueBox.reset();
         }
 
         if (style == IncDecButtons)
         {
-            owner.addAndMakeVisible (incButton = lf.createSliderButton (owner, true));
-            incButton->addListener (this);
+            incButton.reset (lf.createSliderButton (owner, true));
+            decButton.reset (lf.createSliderButton (owner, false));
 
-            owner.addAndMakeVisible (decButton = lf.createSliderButton (owner, false));
-            decButton->addListener (this);
+            owner.addAndMakeVisible (incButton.get());
+            owner.addAndMakeVisible (decButton.get());
+
+            incButton->onClick = [this] { incrementOrDecrement (normRange.interval); };
+            decButton->onClick = [this] { incrementOrDecrement (-normRange.interval); };
 
             if (incDecButtonMode != incDecButtonsNotDraggable)
             {
@@ -591,14 +593,14 @@ public:
                 decButton->setRepeatSpeed (300, 100, 20);
             }
 
-            const String tooltip (owner.getTooltip());
+            auto tooltip = owner.getTooltip();
             incButton->setTooltip (tooltip);
             decButton->setTooltip (tooltip);
         }
         else
         {
-            incButton = nullptr;
-            decButton = nullptr;
+            incButton.reset();
+            decButton.reset();
         }
 
         owner.setComponentEffect (lf.getSliderEffect (owner));
@@ -629,7 +631,7 @@ public:
                          ModalCallbackFunction::forComponent (sliderMenuCallback, &owner));
     }
 
-    static void sliderMenuCallback (const int result, Slider* slider)
+    static void sliderMenuCallback (int result, Slider* slider)
     {
         if (slider != nullptr)
         {
@@ -647,16 +649,16 @@ public:
 
     int getThumbIndexAt (const MouseEvent& e)
     {
-        const bool isTwoValue   = (style == TwoValueHorizontal   || style == TwoValueVertical);
-        const bool isThreeValue = (style == ThreeValueHorizontal || style == ThreeValueVertical);
+        bool isTwoValue   = (style == TwoValueHorizontal   || style == TwoValueVertical);
+        bool isThreeValue = (style == ThreeValueHorizontal || style == ThreeValueVertical);
 
         if (isTwoValue || isThreeValue)
         {
-            const float mousePos = isVertical() ? e.position.y : e.position.x;
+            auto mousePos = isVertical() ? e.position.y : e.position.x;
 
-            const float normalPosDistance = std::abs (getLinearSliderPos (currentValue.getValue()) - mousePos);
-            const float minPosDistance    = std::abs (getLinearSliderPos (valueMin.getValue()) + (isVertical() ? 0.1f : -0.1f) - mousePos);
-            const float maxPosDistance    = std::abs (getLinearSliderPos (valueMax.getValue()) + (isVertical() ? -0.1f : 0.1f) - mousePos);
+            auto normalPosDistance = std::abs (getLinearSliderPos (currentValue.getValue()) - mousePos);
+            auto minPosDistance    = std::abs (getLinearSliderPos (valueMin.getValue()) + (isVertical() ? 0.1f : -0.1f) - mousePos);
+            auto maxPosDistance    = std::abs (getLinearSliderPos (valueMax.getValue()) + (isVertical() ? -0.1f : 0.1f) - mousePos);
 
             if (isTwoValue)
                 return maxPosDistance <= minPosDistance ? 2 : 1;
@@ -674,24 +676,24 @@ public:
     //==============================================================================
     void handleRotaryDrag (const MouseEvent& e)
     {
-        const float dx = e.position.x - sliderRect.getCentreX();
-        const float dy = e.position.y - sliderRect.getCentreY();
+        auto dx = e.position.x - sliderRect.getCentreX();
+        auto dy = e.position.y - sliderRect.getCentreY();
 
         if (dx * dx + dy * dy > 25.0f)
         {
-            double angle = std::atan2 ((double) dx, (double) -dy);
+            auto angle = std::atan2 ((double) dx, (double) -dy);
 
             while (angle < 0.0)
-                angle += double_Pi * 2.0;
+                angle += MathConstants<double>::twoPi;
 
             if (rotaryParams.stopAtEnd && e.mouseWasDraggedSinceMouseDown())
             {
-                if (std::abs (angle - lastAngle) > double_Pi)
+                if (std::abs (angle - lastAngle) > MathConstants<double>::pi)
                 {
                     if (angle >= lastAngle)
-                        angle -= double_Pi * 2.0;
+                        angle -= MathConstants<double>::twoPi;
                     else
-                        angle += double_Pi * 2.0;
+                        angle += MathConstants<double>::twoPi;
                 }
 
                 if (angle >= lastAngle)
@@ -702,7 +704,7 @@ public:
             else
             {
                 while (angle < rotaryParams.startAngleRadians)
-                    angle += double_Pi * 2.0;
+                    angle += MathConstants<double>::twoPi;
 
                 if (angle > rotaryParams.endAngleRadians)
                 {
@@ -714,7 +716,7 @@ public:
                 }
             }
 
-            const double proportion = (angle - rotaryParams.startAngleRadians) / (rotaryParams.endAngleRadians - rotaryParams.startAngleRadians);
+            auto proportion = (angle - rotaryParams.startAngleRadians) / (rotaryParams.endAngleRadians - rotaryParams.startAngleRadians);
             valueWhenLastDragged = owner.proportionOfLengthToValue (jlimit (0.0, 1.0, proportion));
             lastAngle = angle;
         }
@@ -722,7 +724,7 @@ public:
 
     void handleAbsoluteDrag (const MouseEvent& e)
     {
-        const float mousePos = (isHorizontal() || style == RotaryHorizontalDrag) ? e.position.x : e.position.y;
+        auto mousePos = (isHorizontal() || style == RotaryHorizontalDrag) ? e.position.x : e.position.y;
         double newPos = 0;
 
         if (style == RotaryHorizontalDrag
@@ -768,26 +770,24 @@ public:
 
     void handleVelocityDrag (const MouseEvent& e)
     {
-        const bool hasHorizontalStyle =
+        bool hasHorizontalStyle =
             (isHorizontal() ||  style == RotaryHorizontalDrag
                             || (style == IncDecButtons && incDecDragDirectionIsHorizontal()));
 
-        float mouseDiff;
-        if (style == RotaryHorizontalVerticalDrag)
-            mouseDiff = (e.position.x - mousePosWhenLastDragged.x) + (mousePosWhenLastDragged.y - e.position.y);
-        else
-            mouseDiff = (hasHorizontalStyle ? e.position.x - mousePosWhenLastDragged.x
-                                            : e.position.y - mousePosWhenLastDragged.y);
+        auto mouseDiff = style == RotaryHorizontalVerticalDrag
+                            ? (e.position.x - mousePosWhenLastDragged.x) + (mousePosWhenLastDragged.y - e.position.y)
+                            : (hasHorizontalStyle ? e.position.x - mousePosWhenLastDragged.x
+                                                  : e.position.y - mousePosWhenLastDragged.y);
 
-        const double maxSpeed = jmax (200, sliderRegionSize);
-        double speed = jlimit (0.0, maxSpeed, (double) std::abs (mouseDiff));
+        auto maxSpeed = jmax (200.0, (double) sliderRegionSize);
+        auto speed = jlimit (0.0, maxSpeed, (double) std::abs (mouseDiff));
 
         if (speed != 0.0)
         {
             speed = 0.2 * velocityModeSensitivity
-                      * (1.0 + std::sin (double_Pi * (1.5 + jmin (0.5, velocityModeOffset
-                                                                    + jmax (0.0, (double) (speed - velocityModeThreshold))
-                                                                        / maxSpeed))));
+                      * (1.0 + std::sin (MathConstants<double>::pi * (1.5 + jmin (0.5, velocityModeOffset
+                                                                                         + jmax (0.0, (double) (speed - velocityModeThreshold))
+                                                                                            / maxSpeed))));
 
             if (mouseDiff < 0)
                 speed = -speed;
@@ -796,8 +796,7 @@ public:
                  || (style == IncDecButtons && ! incDecDragDirectionIsHorizontal()))
                 speed = -speed;
 
-            const double currentPos = owner.valueToProportionOfLength (valueWhenLastDragged);
-
+            auto currentPos = owner.valueToProportionOfLength (valueWhenLastDragged);
             valueWhenLastDragged = owner.proportionOfLengthToValue (jlimit (0.0, 1.0, currentPos + speed));
 
             e.source.enableUnboundedMouseMovement (true, false);
@@ -809,8 +808,8 @@ public:
         incDecDragged = false;
         useDragEvents = false;
         mouseDragStartPos = mousePosWhenLastDragged = e.position;
-        currentDrag = nullptr;
-        popupDisplay = nullptr;
+        currentDrag.reset();
+        popupDisplay.reset();
 
         if (owner.isEnabled())
         {
@@ -823,7 +822,7 @@ public:
             {
                 mouseDoubleClick();
             }
-            else if (maximum > minimum)
+            else if (normRange.end > normRange.start)
             {
                 useDragEvents = true;
 
@@ -846,10 +845,12 @@ public:
                 if (showPopupOnDrag || showPopupOnHover)
                 {
                     showPopupDisplay();
-                    popupDisplay->stopTimer();
+
+                    if (popupDisplay != nullptr)
+                        popupDisplay->stopTimer();
                 }
 
-                currentDrag = new DragInProgress (*this);
+                currentDrag.reset (new DragInProgress (*this));
                 mouseDrag (e);
             }
         }
@@ -857,7 +858,7 @@ public:
 
     void mouseDrag (const MouseEvent& e)
     {
-        if (useDragEvents && maximum > minimum
+        if (useDragEvents && normRange.end > normRange.start
              && ! ((style == LinearBar || style == LinearBarVertical)
                     && e.mouseWasClicked() && valueBox != nullptr && valueBox->isEditable()))
         {
@@ -878,7 +879,7 @@ public:
                     mouseDragStartPos = e.position;
                 }
 
-                if (isAbsoluteDragMode (e.mods) || (maximum - minimum) / sliderRegionSize < interval)
+                if (isAbsoluteDragMode (e.mods) || (normRange.end - normRange.start) / sliderRegionSize < normRange.interval)
                 {
                     dragMode = absoluteDrag;
                     handleAbsoluteDrag (e);
@@ -890,7 +891,7 @@ public:
                 }
             }
 
-            valueWhenLastDragged = jlimit (minimum, maximum, valueWhenLastDragged);
+            valueWhenLastDragged = jlimit (normRange.start, normRange.end, valueWhenLastDragged);
 
             if (sliderBeingDragged == 0)
             {
@@ -926,7 +927,7 @@ public:
     {
         if (owner.isEnabled()
              && useDragEvents
-             && (maximum > minimum)
+             && (normRange.end > normRange.start)
              && (style != IncDecButtons || incDecDragged))
         {
             restoreMouseIfHidden();
@@ -934,8 +935,8 @@ public:
             if (sendChangeOnlyOnRelease && valueOnMouseDown != static_cast<double> (currentValue.getValue()))
                 triggerChangeMessage (sendNotificationAsync);
 
-            currentDrag = nullptr;
-            popupDisplay = nullptr;
+            currentDrag.reset();
+            popupDisplay.reset();
 
             if (style == IncDecButtons)
             {
@@ -948,43 +949,63 @@ public:
             popupDisplay->startTimer (200);
         }
 
-        currentDrag = nullptr;
+        currentDrag.reset();
     }
 
     void mouseMove()
     {
-        if (showPopupOnHover
-             && style != TwoValueHorizontal
-             && style != TwoValueVertical)
+        auto isTwoValue   = (style == TwoValueHorizontal   || style == TwoValueVertical);
+        auto isThreeValue = (style == ThreeValueHorizontal || style == ThreeValueVertical);
+
+        // this is a workaround for a bug where the popup display being dismissed triggers
+        // a mouse move causing it to never be hidden
+        auto shouldShowPopup = showPopupOnHover
+                                && (Time::getMillisecondCounterHiRes() - lastPopupDismissal) > 250;
+
+        if (shouldShowPopup
+             && ! isTwoValue
+             && ! isThreeValue)
         {
             if (owner.isMouseOver (true))
             {
                 if (popupDisplay == nullptr)
                     showPopupDisplay();
 
-                if (popupDisplay != nullptr)
-                    popupDisplay->startTimer (2000);
+                if (popupDisplay != nullptr && popupHoverTimeout != -1)
+                    popupDisplay->startTimer (popupHoverTimeout);
             }
         }
     }
 
     void mouseExit()
     {
-        popupDisplay = nullptr;
+        popupDisplay.reset();
     }
 
     void showPopupDisplay()
     {
+        if (style == IncDecButtons)
+            return;
+
         if (popupDisplay == nullptr)
         {
-            popupDisplay = new PopupDisplayComponent (owner);
-
-            updatePopupDisplay (getValue());
+            popupDisplay.reset (new PopupDisplayComponent (owner));
 
             if (parentForPopupDisplay != nullptr)
-                parentForPopupDisplay->addChildComponent (popupDisplay);
+                parentForPopupDisplay->addChildComponent (popupDisplay.get());
             else
                 popupDisplay->addToDesktop (ComponentPeer::windowIsTemporary);
+
+            if (style == SliderStyle::TwoValueHorizontal
+                || style == SliderStyle::TwoValueVertical)
+            {
+                updatePopupDisplay (sliderBeingDragged == 2 ? getMaxValue()
+                                                            : getMinValue());
+            }
+            else
+            {
+                updatePopupDisplay (getValue());
+            }
 
             popupDisplay->setVisible (true);
         }
@@ -1000,8 +1021,8 @@ public:
     {
         return doubleClickToValue
                 && style != IncDecButtons
-                && minimum <= doubleClickReturnValue
-                && maximum >= doubleClickReturnValue;
+                && normRange.start <= doubleClickReturnValue
+                && normRange.end >= doubleClickReturnValue;
     }
 
     void mouseDoubleClick()
@@ -1016,10 +1037,10 @@ public:
     double getMouseWheelDelta (double value, double wheelAmount)
     {
         if (style == IncDecButtons)
-            return interval * wheelAmount;
+            return normRange.interval * wheelAmount;
 
-        const double proportionDelta = wheelAmount * 0.15f;
-        const double currentPos = owner.valueToProportionOfLength (value);
+        auto proportionDelta = wheelAmount * 0.15;
+        auto currentPos = owner.valueToProportionOfLength (value);
         return owner.proportionOfLengthToValue (jlimit (0.0, 1.0, currentPos + proportionDelta)) - value;
     }
 
@@ -1035,18 +1056,18 @@ public:
             {
                 lastMouseWheelTime = e.eventTime;
 
-                if (maximum > minimum && ! e.mods.isAnyMouseButtonDown())
+                if (normRange.end > normRange.start && ! e.mods.isAnyMouseButtonDown())
                 {
                     if (valueBox != nullptr)
                         valueBox->hideEditor (false);
 
-                    const double value = static_cast<double> (currentValue.getValue());
-                    const double delta = getMouseWheelDelta (value, (std::abs (wheel.deltaX) > std::abs (wheel.deltaY)
-                                                                        ? -wheel.deltaX : wheel.deltaY)
-                                                                      * (wheel.isReversed ? -1.0f : 1.0f));
+                    auto value = static_cast<double> (currentValue.getValue());
+                    auto delta = getMouseWheelDelta (value, (std::abs (wheel.deltaX) > std::abs (wheel.deltaY)
+                                                                  ? -wheel.deltaX : wheel.deltaY)
+                                                               * (wheel.isReversed ? -1.0f : 1.0f));
                     if (delta != 0.0)
                     {
-                        const double newValue = value + jmax (interval, std::abs (delta)) * (delta < 0 ? -1.0 : 1.0);
+                        auto newValue = value + jmax (normRange.interval, std::abs (delta)) * (delta < 0 ? -1.0 : 1.0);
 
                         DragInProgress drag (*this);
                         setValue (owner.snapValue (newValue, notDragging), sendNotificationSync);
@@ -1068,8 +1089,7 @@ public:
 
     bool isAbsoluteDragMode (ModifierKeys mods) const
     {
-        return isVelocityBased == (userKeyOverridesVelocity
-                                    && mods.testFlags (ModifierKeys::ctrlAltCommandModifiers));
+        return isVelocityBased == (userKeyOverridesVelocity && mods.testFlags (modifierToSwapModes));
     }
 
     void restoreMouseIfHidden()
@@ -1080,17 +1100,17 @@ public:
             {
                 ms.enableUnboundedMouseMovement (false);
 
-                const double pos = sliderBeingDragged == 2 ? getMaxValue()
-                                                           : (sliderBeingDragged == 1 ? getMinValue()
-                                                                                      : static_cast<double> (currentValue.getValue()));
+                auto pos = sliderBeingDragged == 2 ? getMaxValue()
+                                                   : (sliderBeingDragged == 1 ? getMinValue()
+                                                                              : static_cast<double> (currentValue.getValue()));
                 Point<float> mousePos;
 
                 if (isRotary())
                 {
                     mousePos = ms.getLastMouseDownPosition();
 
-                    const float delta = (float) (pixelsForFullDragExtent * (owner.valueToProportionOfLength (valueOnMouseDown)
-                                                                                - owner.valueToProportionOfLength (pos)));
+                    auto delta = (float) (pixelsForFullDragExtent * (owner.valueToProportionOfLength (valueOnMouseDown)
+                                                                       - owner.valueToProportionOfLength (pos)));
 
                     if (style == RotaryHorizontalDrag)      mousePos += Point<float> (-delta, 0.0f);
                     else if (style == RotaryVerticalDrag)   mousePos += Point<float> (0.0f, delta);
@@ -1102,13 +1122,13 @@ public:
                 }
                 else
                 {
-                    const float pixelPos = (float) getLinearSliderPos (pos);
+                    auto pixelPos = (float) getLinearSliderPos (pos);
 
                     mousePos = owner.localPointToGlobal (Point<float> (isHorizontal() ? pixelPos : (owner.getWidth() / 2.0f),
                                                                        isVertical()   ? pixelPos : (owner.getHeight() / 2.0f)));
                 }
 
-                ms.setScreenPosition (mousePos);
+                const_cast <MouseInputSource&> (ms).setScreenPosition (mousePos);
             }
         }
     }
@@ -1120,7 +1140,7 @@ public:
         {
             if (isRotary())
             {
-                const float sliderPos = (float) owner.valueToProportionOfLength (lastCurrentValue);
+                auto sliderPos = (float) owner.valueToProportionOfLength (lastCurrentValue);
                 jassert (sliderPos >= 0 && sliderPos <= 1.0f);
 
                 lf.drawRotarySlider (g,
@@ -1151,8 +1171,7 @@ public:
     //==============================================================================
     void resized (LookAndFeel& lf)
     {
-        SliderLayout layout = lf.getSliderLayout (owner);
-
+        auto layout = lf.getSliderLayout (owner);
         sliderRect = layout.sliderBounds;
 
         if (valueBox != nullptr)
@@ -1178,7 +1197,7 @@ public:
 
     void resizeIncDecButtons()
     {
-        Rectangle<int> buttonRect (sliderRect);
+        auto buttonRect = sliderRect;
 
         if (textBoxPos == TextBoxLeft || textBoxPos == TextBoxRight)
             buttonRect.expand (-2, 0);
@@ -1210,9 +1229,9 @@ public:
     ListenerList<Slider::Listener> listeners;
     Value currentValue, valueMin, valueMax;
     double lastCurrentValue = 0, lastValueMin = 0, lastValueMax = 0;
-    double minimum = 0, maximum = 10, interval = 0, doubleClickReturnValue = 0;
-    double valueWhenLastDragged = 0, valueOnMouseDown = 0, skewFactor = 1.0, lastAngle = 0;
-    bool symmetricSkew = false;
+    NormalisableRange<double> normRange { 0.0, 10.0 };
+    double doubleClickReturnValue = 0;
+    double valueWhenLastDragged = 0, valueOnMouseDown = 0, lastAngle = 0;
     double velocityModeSensitivity = 1.0, velocityModeOffset = 0, minMaxDiff = 0;
     int velocityModeThreshold = 1;
     RotaryParameters rotaryParams;
@@ -1229,6 +1248,7 @@ public:
     int numDecimalPlaces = 7;
     int textBoxWidth = 80, textBoxHeight = 20;
     IncDecButtonMode incDecButtonMode = incDecButtonsNotDraggable;
+    ModifierKeys::Flags modifierToSwapModes = ModifierKeys::ctrlAltCommandModifiers;
 
     bool editableText = true;
     bool doubleClickToValue = false;
@@ -1244,6 +1264,9 @@ public:
     bool scrollWheelEnabled = true;
     bool snapsToMousePos = true;
 
+    int popupHoverTimeout = 2000;
+    double lastPopupDismissal = 0.0;
+
     ScopedPointer<Label> valueBox;
     ScopedPointer<Button> incButton, decButton;
 
@@ -1258,6 +1281,11 @@ public:
             setAlwaysOnTop (true);
             setAllowedPlacement (owner.getLookAndFeel().getSliderPopupPlacement (s));
             setLookAndFeel (&s.getLookAndFeel());
+        }
+
+        ~PopupDisplayComponent()
+        {
+            owner.pimpl->lastPopupDismissal = Time::getMillisecondCounterHiRes();
         }
 
         void paintContent (Graphics& g, int w, int h) override
@@ -1282,7 +1310,8 @@ public:
 
         void timerCallback() override
         {
-            owner.pimpl->popupDisplay = nullptr;
+            stopTimer();
+            owner.pimpl->popupDisplay.reset();
         }
 
     private:
@@ -1300,8 +1329,8 @@ public:
     static double smallestAngleBetween (double a1, double a2) noexcept
     {
         return jmin (std::abs (a1 - a2),
-                     std::abs (a1 + double_Pi * 2.0 - a2),
-                     std::abs (a2 + double_Pi * 2.0 - a1));
+                     std::abs (a1 + MathConstants<double>::twoPi - a2),
+                     std::abs (a2 + MathConstants<double>::twoPi - a1));
     }
 };
 
@@ -1327,7 +1356,7 @@ void Slider::init (SliderStyle style, TextEntryBoxPosition textBoxPos)
     setWantsKeyboardFocus (false);
     setRepaintsOnMouseActivity (true);
 
-    pimpl = new Pimpl (*this, style, textBoxPos);
+    pimpl.reset (new Pimpl (*this, style, textBoxPos));
 
     Slider::lookAndFeelChanged();
     updateText();
@@ -1343,21 +1372,21 @@ void Slider::removeListener (Listener* l)    { pimpl->listeners.remove (l); }
 
 //==============================================================================
 Slider::SliderStyle Slider::getSliderStyle() const noexcept     { return pimpl->style; }
-void Slider::setSliderStyle (const SliderStyle newStyle)        { pimpl->setSliderStyle (newStyle); }
+void Slider::setSliderStyle (SliderStyle newStyle)              { pimpl->setSliderStyle (newStyle); }
 
 void Slider::setRotaryParameters (RotaryParameters p) noexcept
 {
     // make sure the values are sensible..
     jassert (p.startAngleRadians >= 0 && p.endAngleRadians >= 0);
-    jassert (p.startAngleRadians < float_Pi * 4.0f && p.endAngleRadians < float_Pi * 4.0f);
+    jassert (p.startAngleRadians < MathConstants<float>::pi * 4.0f
+              && p.endAngleRadians < MathConstants<float>::pi * 4.0f);
 
     pimpl->rotaryParams = p;
 }
 
 void Slider::setRotaryParameters (float startAngleRadians, float endAngleRadians, bool stopAtEnd) noexcept
 {
-    RotaryParameters p = { startAngleRadians, endAngleRadians, stopAtEnd };
-    setRotaryParameters (p);
+    setRotaryParameters ({ startAngleRadians, endAngleRadians, stopAtEnd });
 }
 
 Slider::RotaryParameters Slider::getRotaryParameters() const noexcept
@@ -1372,48 +1401,48 @@ int Slider::getVelocityThreshold() const noexcept           { return pimpl->velo
 double Slider::getVelocitySensitivity() const noexcept      { return pimpl->velocityModeSensitivity; }
 double Slider::getVelocityOffset() const noexcept           { return pimpl->velocityModeOffset; }
 
-void Slider::setVelocityModeParameters (const double sensitivity, const int threshold,
-                                        const double offset, const bool userCanPressKeyToSwapMode)
+void Slider::setVelocityModeParameters (double sensitivity, int threshold,
+                                        double offset, bool userCanPressKeyToSwapMode,
+                                        ModifierKeys::Flags modifierToSwapModes)
 {
     jassert (threshold >= 0);
     jassert (sensitivity > 0);
     jassert (offset >= 0);
 
-    pimpl->setVelocityModeParameters (sensitivity, threshold, offset, userCanPressKeyToSwapMode);
+    pimpl->setVelocityModeParameters (sensitivity, threshold, offset,
+                                      userCanPressKeyToSwapMode, modifierToSwapModes);
 }
 
-double Slider::getSkewFactor() const noexcept               { return pimpl->skewFactor; }
-bool Slider::isSymmetricSkew() const noexcept               { return pimpl->symmetricSkew; }
+double Slider::getSkewFactor() const noexcept               { return pimpl->normRange.skew; }
+bool Slider::isSymmetricSkew() const noexcept               { return pimpl->normRange.symmetricSkew; }
 
 void Slider::setSkewFactor (double factor, bool symmetricSkew)
 {
-    pimpl->skewFactor = factor;
-    pimpl->symmetricSkew = symmetricSkew;
+    pimpl->normRange.skew = factor;
+    pimpl->normRange.symmetricSkew = symmetricSkew;
 }
 
-void Slider::setSkewFactorFromMidPoint (const double sliderValueToShowAtMidPoint)
+void Slider::setSkewFactorFromMidPoint (double sliderValueToShowAtMidPoint)
 {
-    pimpl->setSkewFactorFromMidPoint (sliderValueToShowAtMidPoint);
-    pimpl->symmetricSkew = false;
+    pimpl->normRange.setSkewForCentre (sliderValueToShowAtMidPoint);
 }
 
 int Slider::getMouseDragSensitivity() const noexcept        { return pimpl->pixelsForFullDragExtent; }
 
-void Slider::setMouseDragSensitivity (const int distanceForFullScaleDrag)
+void Slider::setMouseDragSensitivity (int distanceForFullScaleDrag)
 {
     jassert (distanceForFullScaleDrag > 0);
 
     pimpl->pixelsForFullDragExtent = distanceForFullScaleDrag;
 }
 
-void Slider::setIncDecButtonsMode (const IncDecButtonMode mode)             { pimpl->setIncDecButtonsMode (mode); }
+void Slider::setIncDecButtonsMode (IncDecButtonMode mode)                   { pimpl->setIncDecButtonsMode (mode); }
 
 Slider::TextEntryBoxPosition Slider::getTextBoxPosition() const noexcept    { return pimpl->textBoxPos; }
 int Slider::getTextBoxWidth() const noexcept                                { return pimpl->textBoxWidth; }
 int Slider::getTextBoxHeight() const noexcept                               { return pimpl->textBoxHeight; }
 
-void Slider::setTextBoxStyle (const TextEntryBoxPosition newPosition, const bool isReadOnly,
-                              const int textEntryBoxWidth, const int textEntryBoxHeight)
+void Slider::setTextBoxStyle (TextEntryBoxPosition newPosition, bool isReadOnly, int textEntryBoxWidth, int textEntryBoxHeight)
 {
     pimpl->setTextBoxStyle (newPosition, isReadOnly, textEntryBoxWidth, textEntryBoxHeight);
 }
@@ -1421,21 +1450,22 @@ void Slider::setTextBoxStyle (const TextEntryBoxPosition newPosition, const bool
 bool Slider::isTextBoxEditable() const noexcept                     { return pimpl->editableText; }
 void Slider::setTextBoxIsEditable (const bool shouldBeEditable)     { pimpl->setTextBoxIsEditable (shouldBeEditable); }
 void Slider::showTextBox()                                          { pimpl->showTextBox(); }
-void Slider::hideTextBox (const bool discardCurrentEditorContents)  { pimpl->hideTextBox (discardCurrentEditorContents); }
+void Slider::hideTextBox (bool discardCurrentEditorContents)        { pimpl->hideTextBox (discardCurrentEditorContents); }
 
 void Slider::setChangeNotificationOnlyOnRelease (bool onlyNotifyOnRelease)
 {
     pimpl->sendChangeOnlyOnRelease = onlyNotifyOnRelease;
 }
 
-bool Slider::getSliderSnapsToMousePosition() const noexcept                 { return pimpl->snapsToMousePos; }
-void Slider::setSliderSnapsToMousePosition (const bool shouldSnapToMouse)   { pimpl->snapsToMousePos = shouldSnapToMouse; }
+bool Slider::getSliderSnapsToMousePosition() const noexcept           { return pimpl->snapsToMousePos; }
+void Slider::setSliderSnapsToMousePosition (bool shouldSnapToMouse)   { pimpl->snapsToMousePos = shouldSnapToMouse; }
 
-void Slider::setPopupDisplayEnabled (bool showOnDrag, bool showOnHover, Component* parent)
+void Slider::setPopupDisplayEnabled (bool showOnDrag, bool showOnHover, Component* parent, int hoverTimeout)
 {
     pimpl->showPopupOnDrag = showOnDrag;
     pimpl->showPopupOnHover = showOnHover;
     pimpl->parentForPopupDisplay = parent;
+    pimpl->popupHoverTimeout = hoverTimeout;
 }
 
 Component* Slider::getCurrentPopupDisplay() const noexcept      { return pimpl->popupDisplay.get(); }
@@ -1446,22 +1476,21 @@ void Slider::lookAndFeelChanged()   { pimpl->lookAndFeelChanged (getLookAndFeel(
 void Slider::enablementChanged()    { repaint(); pimpl->updateTextBoxEnablement(); }
 
 //==============================================================================
-double Slider::getMaximum() const noexcept      { return pimpl->maximum; }
-double Slider::getMinimum() const noexcept      { return pimpl->minimum; }
-double Slider::getInterval() const noexcept     { return pimpl->interval; }
+Range<double> Slider::getRange() const noexcept  { return { pimpl->normRange.start, pimpl->normRange.end }; }
+double Slider::getMaximum() const noexcept       { return pimpl->normRange.end; }
+double Slider::getMinimum() const noexcept       { return pimpl->normRange.start; }
+double Slider::getInterval() const noexcept      { return pimpl->normRange.interval; }
 
-void Slider::setRange (double newMin, double newMax, double newInt)
-{
-    pimpl->setRange (newMin, newMax, newInt);
-}
+void Slider::setRange (double newMin, double newMax, double newInt)      { pimpl->setRange (newMin, newMax, newInt); }
+void Slider::setRange (Range<double> newRange, double newInt)            { pimpl->setRange (newRange.getStart(), newRange.getEnd(), newInt); }
+void Slider::setNormalisableRange (NormalisableRange<double> newRange)   { pimpl->setNormalisableRange (newRange); }
 
-Value& Slider::getValueObject() noexcept        { return pimpl->currentValue; }
-Value& Slider::getMinValueObject() noexcept     { return pimpl->valueMin; }
-Value& Slider::getMaxValueObject() noexcept     { return pimpl->valueMax; }
+double Slider::getValue() const                  { return pimpl->getValue(); }
+Value& Slider::getValueObject() noexcept         { return pimpl->currentValue; }
+Value& Slider::getMinValueObject() noexcept      { return pimpl->valueMin; }
+Value& Slider::getMaxValueObject() noexcept      { return pimpl->valueMax; }
 
-double Slider::getValue() const                 { return pimpl->getValue(); }
-
-void Slider::setValue (double newValue, const NotificationType notification)
+void Slider::setValue (double newValue, NotificationType notification)
 {
     pimpl->setValue (newValue, notification);
 }
@@ -1469,17 +1498,17 @@ void Slider::setValue (double newValue, const NotificationType notification)
 double Slider::getMinValue() const      { return pimpl->getMinValue(); }
 double Slider::getMaxValue() const      { return pimpl->getMaxValue(); }
 
-void Slider::setMinValue (double newValue, const NotificationType notification, bool allowNudgingOfOtherValues)
+void Slider::setMinValue (double newValue, NotificationType notification, bool allowNudgingOfOtherValues)
 {
     pimpl->setMinValue (newValue, notification, allowNudgingOfOtherValues);
 }
 
-void Slider::setMaxValue (double newValue, const NotificationType notification, bool allowNudgingOfOtherValues)
+void Slider::setMaxValue (double newValue, NotificationType notification, bool allowNudgingOfOtherValues)
 {
     pimpl->setMaxValue (newValue, notification, allowNudgingOfOtherValues);
 }
 
-void Slider::setMinAndMaxValues (double newMinValue, double newMaxValue, const NotificationType notification)
+void Slider::setMinAndMaxValues (double newMinValue, double newMaxValue, NotificationType notification)
 {
     pimpl->setMinAndMaxValues (newMinValue, newMaxValue, notification);
 }
@@ -1510,6 +1539,9 @@ String Slider::getTextValueSuffix() const
 
 String Slider::getTextFromValue (double v)
 {
+    if (textFromValueFunction != nullptr)
+        return textFromValueFunction (v);
+
     if (getNumDecimalPlacesToDisplay() > 0)
         return String (v, getNumDecimalPlacesToDisplay()) + getTextValueSuffix();
 
@@ -1518,7 +1550,10 @@ String Slider::getTextFromValue (double v)
 
 double Slider::getValueFromText (const String& text)
 {
-    String t (text.trimStart());
+    if (valueFromTextFunction != nullptr)
+        return valueFromTextFunction (text);
+
+    auto t = text.trimStart();
 
     if (t.endsWith (getTextValueSuffix()))
         t = t.substring (0, t.length() - getTextValueSuffix().length());
@@ -1532,38 +1567,12 @@ double Slider::getValueFromText (const String& text)
 
 double Slider::proportionOfLengthToValue (double proportion)
 {
-    const double skew = getSkewFactor();
-
-    if (! isSymmetricSkew())
-    {
-        if (skew != 1.0 && proportion > 0.0)
-            proportion = std::exp (std::log (proportion) / skew);
-
-        return getMinimum() + (getMaximum() - getMinimum()) * proportion;
-    }
-
-    double distanceFromMiddle = 2.0 * proportion - 1.0;
-
-    if (skew != 1.0 && distanceFromMiddle != 0.0)
-        distanceFromMiddle =  std::exp (std::log (std::abs (distanceFromMiddle)) / skew)
-                                     * (distanceFromMiddle < 0 ? -1 : 1);
-
-    return getMinimum() + (getMaximum() - getMinimum()) / 2.0 * (1 + distanceFromMiddle);
+    return pimpl->normRange.convertFrom0to1 (proportion);
 }
 
 double Slider::valueToProportionOfLength (double value)
 {
-    const double n = (value - getMinimum()) / (getMaximum() - getMinimum());
-    const double skew = getSkewFactor();
-
-    if (skew == 1.0)
-        return n;
-
-    if (! isSymmetricSkew())
-        return std::pow (n, skew);
-
-    double distanceFromMiddle = 2.0 * n - 1.0;
-    return (1.0 + std::pow (std::abs (distanceFromMiddle), skew) * (distanceFromMiddle < 0 ? -1 : 1)) / 2.0;
+    return pimpl->normRange.convertTo0to1 (value);
 }
 
 double Slider::snapValue (double attemptedValue, DragMode)
@@ -1571,25 +1580,30 @@ double Slider::snapValue (double attemptedValue, DragMode)
     return attemptedValue;
 }
 
-int Slider::getNumDecimalPlacesToDisplay() const noexcept    { return pimpl->numDecimalPlaces; }
+int Slider::getNumDecimalPlacesToDisplay() const noexcept   { return pimpl->numDecimalPlaces; }
+
+void Slider::setNumDecimalPlacesToDisplay (int decimalPlacesToDisplay)
+{
+    pimpl->numDecimalPlaces = decimalPlacesToDisplay;
+    updateText();
+}
 
 //==============================================================================
-int Slider::getThumbBeingDragged() const noexcept            { return pimpl->sliderBeingDragged; }
-
+int Slider::getThumbBeingDragged() const noexcept           { return pimpl->sliderBeingDragged; }
 void Slider::startedDragging() {}
 void Slider::stoppedDragging() {}
 void Slider::valueChanged() {}
 
 //==============================================================================
-void Slider::setPopupMenuEnabled (const bool menuEnabled)   { pimpl->menuEnabled = menuEnabled; }
-void Slider::setScrollWheelEnabled (const bool enabled)     { pimpl->scrollWheelEnabled = enabled; }
+void Slider::setPopupMenuEnabled (bool menuEnabled)         { pimpl->menuEnabled = menuEnabled; }
+void Slider::setScrollWheelEnabled (bool enabled)           { pimpl->scrollWheelEnabled = enabled; }
 
 bool Slider::isHorizontal() const noexcept                  { return pimpl->isHorizontal(); }
 bool Slider::isVertical() const noexcept                    { return pimpl->isVertical(); }
 bool Slider::isRotary() const noexcept                      { return pimpl->isRotary(); }
 bool Slider::isBar() const noexcept                         { return pimpl->isBar(); }
 
-float Slider::getPositionOfValue (const double value) const { return pimpl->getPositionOfValue (value); }
+float Slider::getPositionOfValue (double value) const       { return pimpl->getPositionOfValue (value); }
 
 //==============================================================================
 void Slider::paint (Graphics& g)        { pimpl->paint (g, getLookAndFeel()); }

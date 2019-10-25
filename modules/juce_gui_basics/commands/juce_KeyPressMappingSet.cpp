@@ -51,7 +51,7 @@ Array<KeyPress> KeyPressMappingSet::getKeyPressesAssignedToCommand (const Comman
         if (mappings.getUnchecked(i)->commandID == commandID)
             return mappings.getUnchecked (i)->keypresses;
 
-    return Array<KeyPress>();
+    return {};
 }
 
 void KeyPressMappingSet::addKeyPress (const CommandID commandID, const KeyPress& newKeyPress, int insertIndex)
@@ -261,7 +261,7 @@ XmlElement* KeyPressMappingSet::createXml (const bool saveDifferencesFromDefault
 
     if (saveDifferencesFromDefaultSet)
     {
-        defaultSet = new KeyPressMappingSet (commandManager);
+        defaultSet.reset (new KeyPressMappingSet (commandManager));
         defaultSet->resetToDefaultMappings();
     }
 

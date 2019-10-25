@@ -48,6 +48,8 @@ namespace FIR
         thanks to FFT.
 
         @see FIRFilter::Coefficients, Convolution, FFT
+
+        @tags{DSP}
     */
     template <typename SampleType>
     class Filter
@@ -65,16 +67,9 @@ namespace FIR
         /** Creates a filter with a given set of coefficients. */
         Filter (Coefficients<NumericType>* coefficientsToUse)  : coefficients (coefficientsToUse)   { reset(); }
 
-        /** Creates a copy of another filter. */
         Filter (const Filter&) = default;
-
-        /** Creates a copy of another filter. */
         Filter (Filter&&) = default;
-
-        /** Assignment operator */
         Filter& operator= (const Filter&) = default;
-
-        /** Assignment operator */
         Filter& operator= (Filter&&) = default;
 
         //==============================================================================
@@ -145,8 +140,19 @@ namespace FIR
             auto* fir = coefficients->getRawCoefficients();
             size_t p = pos;
 
-            for (size_t i = 0; i < numSamples; ++i)
-                dst[i] = processSingleSample (src[i], fifo, fir, size, p);
+            if (context.isBypassed)
+            {
+                for (size_t i = 0; i < numSamples; ++i)
+                {
+                    fifo[p] = dst[i] = src[i];
+                    p = (p == 0 ? size - 1 : p - 1);
+                }
+            }
+            else
+            {
+                for (size_t i = 0; i < numSamples; ++i)
+                    dst[i] = processSingleSample (src[i], fifo, fir, size, p);
+            }
 
             pos = p;
         }
@@ -179,7 +185,7 @@ namespace FIR
         static SampleType JUCE_VECTOR_CALLTYPE processSingleSample (SampleType sample, SampleType* buf,
                                                                     const NumericType* fir, size_t m, size_t& p) noexcept
         {
-            SampleType out = {};
+            SampleType out (0);
 
             buf[p] = sample;
 
@@ -204,6 +210,8 @@ namespace FIR
         A set of coefficients for use in an FIRFilter object.
 
         @see FIRFilter
+
+        @tags{DSP}
     */
     template <typename NumericType>
     struct Coefficients  : public ProcessorState
@@ -215,19 +223,12 @@ namespace FIR
         /** Creates a null set of coefficients of a given size. */
         Coefficients (size_t size)    { coefficients.resize ((int) size); }
 
-        /** Creates a copy of another filter. */
-        Coefficients (const Coefficients&) = default;
-
-        /** Move constructor. */
-        Coefficients (Coefficients&&) = default;
-
         /** Creates a set of coefficients from an array of samples. */
         Coefficients (const NumericType* samples, size_t numSamples)   : coefficients (samples, (int) numSamples) {}
 
-        /** Creates a copy of another filter. */
-        Coefficients& operator= (const Coefficients& other)     { coefficients = other.coefficients; return *this; }
-
-        /** Creates a copy of another filter. */
+        Coefficients (const Coefficients&) = default;
+        Coefficients (Coefficients&&) = default;
+        Coefficients& operator= (const Coefficients&) = default;
         Coefficients& operator= (Coefficients&&) = default;
 
         /** The Coefficients structure is ref-counted, so this is a handy type that can be used

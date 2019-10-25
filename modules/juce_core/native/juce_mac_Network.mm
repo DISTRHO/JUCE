@@ -31,9 +31,11 @@ void MACAddress::findAllAddresses (Array<MACAddress>& result)
     {
         for (const ifaddrs* cursor = addrs; cursor != nullptr; cursor = cursor->ifa_next)
         {
-            auto sto = (sockaddr_storage*) cursor->ifa_addr;
+            // Required to avoid misaligned pointer access
+            sockaddr_storage sto;
+            std::memcpy (&sto, cursor->ifa_addr, sizeof (sockaddr_storage));
 
-            if (sto->ss_family == AF_LINK)
+            if (sto.ss_family == AF_LINK)
             {
                 auto sadd = (const sockaddr_dl*) cursor->ifa_addr;
 
@@ -593,9 +595,9 @@ struct BackgroundDownloadTask  : public URL::DownloadTask
     }
 
     //==============================================================================
-    struct DelegateClass  : public ObjCClass<NSObject<NSURLSessionDelegate> >
+    struct DelegateClass  : public ObjCClass<NSObject<NSURLSessionDelegate>>
     {
-        DelegateClass()  : ObjCClass<NSObject<NSURLSessionDelegate> > ("JUCE_URLDelegate_")
+        DelegateClass()  : ObjCClass<NSObject<NSURLSessionDelegate>> ("JUCE_URLDelegate_")
         {
             addIvar<BackgroundDownloadTask*> ("state");
 
@@ -941,7 +943,7 @@ public:
 
     ~Pimpl()
     {
-        connection = nullptr;
+        connection.reset();
     }
 
     bool connect (WebInputStream::Listener* webInputListener, int numRetries = 0)
@@ -963,12 +965,12 @@ public:
            #if ! (JUCE_IOS || (defined (__MAC_OS_X_VERSION_MIN_REQUIRED) && defined (__MAC_10_10) && __MAC_OS_X_VERSION_MIN_REQUIRED >= __MAC_10_10))
             if (numRetries == 0 && connection->nsUrlErrorCode == NSURLErrorNetworkConnectionLost)
             {
-                connection = nullptr;
+                connection.reset();
                 return connect (webInputListener, ++numRetries);
             }
            #endif
 
-            connection = nullptr;
+            connection.reset();
             return false;
         }
 
@@ -1055,9 +1057,9 @@ public:
             if (wantedPos < position)
                 return false;
 
-            int64 numBytesToSkip = wantedPos - position;
-            const int skipBufferSize = (int) jmin (numBytesToSkip, (int64) 16384);
-            HeapBlock<char> temp ((size_t) skipBufferSize);
+            auto numBytesToSkip = wantedPos - position;
+            auto skipBufferSize = (int) jmin (numBytesToSkip, (int64) 16384);
+            HeapBlock<char> temp (skipBufferSize);
 
             while (numBytesToSkip > 0 && ! isExhausted())
                 numBytesToSkip -= read (temp, (int) jmin (numBytesToSkip, (int64) skipBufferSize));
@@ -1116,7 +1118,7 @@ private:
                     [req addValue: juceStringToNS (value) forHTTPHeaderField: juceStringToNS (key)];
             }
 
-            connection = new URLConnectionState (req, numRedirectsToFollow);
+            connection.reset (new URLConnectionState (req, numRedirectsToFollow));
         }
     }
 

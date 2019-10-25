@@ -40,11 +40,11 @@ namespace SIMDInternal
     template <> struct MaskTypeFor <int16_t>                { typedef uint16_t  type; };
     template <> struct MaskTypeFor <int32_t>                { typedef uint32_t  type; };
     template <> struct MaskTypeFor <int64_t>                { typedef uint64_t  type; };
-    template <> struct MaskTypeFor <std::complex<float> >   { typedef uint32_t  type; };
-    template <> struct MaskTypeFor <std::complex<double> >  { typedef uint64_t  type; };
+    template <> struct MaskTypeFor <std::complex<float>>    { typedef uint32_t  type; };
+    template <> struct MaskTypeFor <std::complex<double>>   { typedef uint64_t  type; };
 
     template <typename Primitive> struct PrimitiveType                           { typedef Primitive type; };
-    template <typename Primitive> struct PrimitiveType<std::complex<Primitive> > { typedef Primitive type; };
+    template <typename Primitive> struct PrimitiveType<std::complex<Primitive>>  { typedef Primitive type; };
 
     template <int n>    struct Log2Helper    { enum { value = Log2Helper<n/2>::value + 1 }; };
     template <>         struct Log2Helper<1> { enum { value = 0 }; };
@@ -53,6 +53,8 @@ namespace SIMDInternal
 /**
     Useful fallback routines to use if the native SIMD op is not supported. You
     should never need to use this directly. Use juce_SIMDRegister instead.
+
+    @tags{DSP}
 */
 template <typename ScalarType, typename vSIMDType>
 struct SIMDFallbackOps
@@ -115,6 +117,19 @@ struct SIMDFallbackOps
             dst [i] = aSrc [i] + (bSrc [i] * cSrc [i]);
 
         return retval;
+    }
+
+    //==============================================================================
+    static forcedinline bool allEqual (vSIMDType a, vSIMDType b) noexcept
+    {
+        auto* aSrc = reinterpret_cast<const ScalarType*> (&a);
+        auto* bSrc = reinterpret_cast<const ScalarType*> (&b);
+
+        for (size_t i = 0; i < n; ++i)
+            if (aSrc[i] != bSrc[i])
+                return false;
+
+        return true;
     }
 
     //==============================================================================
@@ -198,6 +213,25 @@ struct SIMDFallbackOps
             dst [i] = s;
 
         return retval;
+    }
+
+    static forcedinline vSIMDType load (const ScalarType* a) noexcept
+    {
+        vSIMDType retval;
+        auto* dst = reinterpret_cast<ScalarType*> (&retval);
+
+        for (size_t i = 0; i < n; ++i)
+            dst [i] = a[i];
+
+        return retval;
+    }
+
+    static forcedinline void store (vSIMDType value, ScalarType* dest) noexcept
+    {
+        const auto* src = reinterpret_cast<const ScalarType*> (&value);
+
+        for (size_t i = 0; i < n; ++i)
+            dest[i] = src[i];
     }
 
     template <unsigned int shuffle_idx>

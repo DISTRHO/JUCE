@@ -33,13 +33,25 @@
  #error "Incorrect use of JUCE cpp file"
 #endif
 
-#ifdef __clang__
+#if defined (__clang__)
  #pragma clang diagnostic push
  #pragma clang diagnostic ignored "-Wsign-conversion"
  #pragma clang diagnostic ignored "-Wfloat-conversion"
+#elif defined (__GNUC__)
+ #pragma GCC diagnostic push
+ #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+ #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
 
 #include "juce_box2d.h"
+
+typedef juce::int8   int8;
+typedef juce::int16  int16;
+typedef juce::int32  int32;
+typedef juce::uint8  uint8;
+typedef juce::uint16 uint16;
+typedef juce::uint32 uint32;
+
 
 #include "box2d/Collision/b2BroadPhase.cpp"
 #include "box2d/Collision/b2CollideCircle.cpp"
@@ -89,6 +101,8 @@
 
 #include "utils/juce_Box2DRenderer.cpp"
 
-#if JUCE_CLANG
+#if defined (__clang__)
  #pragma clang diagnostic pop
+#elif defined (__GNUC__)
+ #pragma GCC diagnostic pop
 #endif

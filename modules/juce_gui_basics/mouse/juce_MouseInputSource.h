@@ -46,8 +46,10 @@ namespace juce
     method to find out which finger each event came from.
 
     @see MouseEvent
+
+    @tags{GUI}
 */
-class JUCE_API  MouseInputSource
+class JUCE_API  MouseInputSource  final
 {
 public:
     /** Possible mouse input sources. */

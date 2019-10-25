@@ -160,8 +160,7 @@ namespace
 
 struct SharedMessageThread  : public Thread
 {
-    SharedMessageThread ()
-        : Thread ("VstMessageThread")
+    SharedMessageThread()  : Thread ("VstMessageThread")
     {
         startThread (7);
 
@@ -190,12 +189,12 @@ struct SharedMessageThread  : public Thread
         {}
     }
 
-    juce_DeclareSingleton (SharedMessageThread, false)
+    JUCE_DECLARE_SINGLETON (SharedMessageThread, false)
 
     bool initialised = false;
 };
 
-juce_ImplementSingleton (SharedMessageThread)
+JUCE_IMPLEMENT_SINGLETON (SharedMessageThread)
 
 #endif
 
@@ -292,9 +291,9 @@ public:
         vstEffect.plugInIdentifier = JucePlugin_VSTUniqueID;
 
        #ifdef JucePlugin_VSTChunkStructureVersion
-        vstEffect.plugInVersion = convertHexVersionToDecimal (JucePlugin_VSTChunkStructureVersion);
+        vstEffect.plugInVersion = JucePlugin_VSTChunkStructureVersion;
        #else
-        vstEffect.plugInVersion = convertHexVersionToDecimal (JucePlugin_VersionCode);
+        vstEffect.plugInVersion = JucePlugin_VersionCode;
        #endif
 
         vstEffect.processAudioInplaceFunction = processReplacingCB;
@@ -718,8 +717,16 @@ public:
     {
         if (processor != nullptr)
         {
-            jassert (isPositiveAndBelow (index, processor->getNumParameters()));
-            processor->setParameter (index, value);
+            if (auto* param = processor->getParameters()[index])
+            {
+                param->setValue (value);
+                param->sendValueChangedMessageToListeners (value);
+            }
+            else
+            {
+                jassert (isPositiveAndBelow (index, processor->getNumParameters()));
+                processor->setParameter (index, value);
+            }
         }
     }
 
@@ -1480,10 +1487,27 @@ private:
        #if JUCE_VST_RETURN_HEX_VERSION_NUMBER_DIRECTLY
         return (int32) hexVersion;
        #else
-        return (int32) (((hexVersion >> 24) & 0xff) * 1000
-                         + ((hexVersion >> 16) & 0xff) * 100
-                         + ((hexVersion >> 8)  & 0xff) * 10
-                         + (hexVersion & 0xff));
+        // Currently, only Cubase displays the version number to the user
+        // We are hoping here that when other DAWs start to display the version
+        // number, that they do so according to yfede's encoding table in the link
+        // below. If not, then this code will need an if (isSteinberg()) in the
+        // future.
+        int major = (hexVersion >> 16) & 0xff;
+        int minor = (hexVersion >> 8) & 0xff;
+        int bugfix = hexVersion & 0xff;
+
+        // for details, see: https://forum.juce.com/t/issues-with-version-integer-reported-by-vst2/23867
+
+        // Encoding B
+        if (major < 1)
+            return major * 1000 + minor * 100 + bugfix * 10;
+
+        // Encoding E
+        if (major > 100)
+            return major * 10000000 + minor * 100000 + bugfix * 1000;
+
+        // Encoding D
+        return static_cast<int32> (hexVersion);
        #endif
     }
 
@@ -1797,9 +1821,12 @@ private:
         {
             jassert (isPositiveAndBelow (args.index, processor->getNumParameters()));
 
-            if (auto* p = processor->getParameters()[args.index])
+            if (auto* param = processor->getParameters()[args.index])
             {
-                processor->setParameter (args.index, p->getValueForText (String::fromUTF8 ((char*) args.ptr)));
+                auto value = param->getValueForText (String::fromUTF8 ((char*) args.ptr));
+                param->setValue (value);
+                param->sendValueChangedMessageToListeners (value);
+
                 return 1;
             }
         }
@@ -1912,6 +1939,9 @@ private:
         if (args.index == presonusVendorID && args.value == presonusSetContentScaleFactor)
             return handleSetContentScaleFactor (args.opt);
 
+        if (args.index == plugInOpcodeGetParameterText)
+            return handleCockosGetParameterText (args.value, args.ptr, args.opt);
+
         if (auto callbackHandler = dynamic_cast<VSTCallbackHandler*> (processor))
             return callbackHandler->handleVstManufacturerSpecific (args.index, args.value, args.ptr, args.opt);
 
@@ -1968,6 +1998,9 @@ private:
             return (int32) 0xbeef0000;
         }
        #endif
+
+        if (matches ("hasCockosExtensions"))
+            return (int32) 0xbeef0000;
 
         return 0;
     }
@@ -2062,6 +2095,23 @@ private:
         }
 
         return 1;
+    }
+
+    pointer_sized_int handleCockosGetParameterText (pointer_sized_int paramIndex,
+                                                    void* dest,
+                                                    float value)
+    {
+        if (processor != nullptr && dest != nullptr)
+        {
+            if (auto* param = processor->getParameters()[(int) paramIndex])
+            {
+                String text (param->getText (value, 1024));
+                memcpy (dest, text.toRawUTF8(), ((size_t) text.length()) + 1);
+                return 0xbeef;
+            }
+        }
+
+        return 0;
     }
 
     //==============================================================================

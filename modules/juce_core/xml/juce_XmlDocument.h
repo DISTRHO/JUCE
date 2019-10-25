@@ -55,9 +55,12 @@ namespace juce
     if (xml != nullptr && xml->hasTagName ("foobar"))
     {
         ...etc
+    }
     @endcode
 
     @see XmlElement
+
+    @tags{Core}
 */
 class JUCE_API  XmlDocument
 {

@@ -39,6 +39,8 @@ namespace juce
     A subclass of the viewport can be created which will receive calls to its
     visibleAreaChanged() method when the subcomponent changes position or size.
 
+
+    @tags{GUI}
 */
 class JUCE_API  Viewport  : public Component,
                             private ComponentListener,
@@ -237,6 +239,9 @@ public:
         Handy if you need to customise the bar somehow.
     */
     ScrollBar& getHorizontalScrollBar() noexcept                { return *horizontalScrollBar; }
+
+    /** Re-instantiates the scrollbars, which is only really useful if you've overridden createScrollBarComponent(). */
+    void recreateScrollbars();
 
     /** True if there's any off-screen content that could be scrolled vertically,
         or false if everything is currently visible.
