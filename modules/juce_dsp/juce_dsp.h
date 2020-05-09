@@ -247,7 +247,6 @@ namespace juce
 #include "containers/juce_AudioBlock.h"
 #include "processors/juce_ProcessContext.h"
 #include "processors/juce_ProcessorWrapper.h"
-#include "processors/juce_ProcessorChain.h"
 #include "processors/juce_ProcessorDuplicator.h"
 #include "processors/juce_Bias.h"
 #include "processors/juce_Gain.h"
@@ -261,3 +260,6 @@ namespace juce
 #include "frequency/juce_Convolution.h"
 #include "frequency/juce_Windowing.h"
 #include "filter_design/juce_FilterDesign.h"
+
+// this file does not build under C++11
+// #include "processors/juce_ProcessorChain.h"
