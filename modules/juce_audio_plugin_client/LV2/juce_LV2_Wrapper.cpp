@@ -378,31 +378,10 @@ private:
     SizeListener* const sizeListener;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JuceLv2ParentContainer);
-};
 
-static ThreadLocalValue<bool> inParameterChangedCallback;
-
-//==============================================================================
-/**
-    Juce LV2 UI handle
-*/
 class JuceLv2UIWrapper : public AudioProcessorListener,
-                         public Timer,
-                         public JuceLv2ParentContainer::SizeListener
 {
-public:
-   #if JUCE_LINUX
-    static bool hostHasIdleInterface;
-   #endif
-
-    JuceLv2UIWrapper (AudioProcessor* filter_, LV2UI_Write_Function writeFunction_, LV2UI_Controller controller_,
                       LV2UI_Widget* widget, const LV2_Feature* const* features, bool isExternal_)
-        : filter (filter_),
-          writeFunction (writeFunction_),
-          controller (controller_),
-          isExternal (isExternal_),
-          controlPortOffset (0),
-          lastProgramCount (0),
           uiTouch (nullptr),
           programsHost (nullptr),
           externalUIHost (nullptr),
@@ -548,11 +527,7 @@ public:
             case IdleMessage::kMessageParameterChanged:
                 writeFunction (controller, msg.index + controlPortOffset, sizeof (float), 0, &msg.valuef);
                 break;
-            case IdleMessage::kMessageSizeChanged:
                 uiResize->ui_resize (uiResize->handle, msg.index, msg.valuei);
-                break;
-            case IdleMessage::kMessageGestureBegin:
-                uiTouch->touch (uiTouch->handle, msg.index + controlPortOffset, true);
                 break;
             case IdleMessage::kMessageGestureEnd:
                 uiTouch->touch (uiTouch->handle, msg.index + controlPortOffset, false);
@@ -581,20 +556,22 @@ public:
        #if JUCE_LINUX
         if (hostHasIdleInterface && ! isExternal)
         {
+<<<<<<< HEAD
             const IdleMessage msg = { IdleMessage::kMessageParameterChanged, index, 0, newValue };
-            const ScopedLock sl(idleMessagesLock);
-            idleMessages.add(msg);
-        }
+=======
         else
-       #endif
-        {
-            writeFunction (controller, index + controlPortOffset, sizeof (float), 0, &newValue);
         }
     }
 
+<<<<<<< HEAD
     void audioProcessorChanged (AudioProcessor*, const ChangeDetails& details)
     {
         if (details.programChanged && filter != nullptr && programsHost != nullptr)
+=======
+    void audioProcessorChanged (AudioProcessor*)
+    {
+        if (filter != nullptr && programsHost != nullptr)
+>>>>>>> 673ef10e0 (Add LV2 wrapper)
         {
             if (filter->getNumPrograms() != lastProgramCount)
             {
@@ -614,7 +591,11 @@ public:
        #if JUCE_LINUX
         if (hostHasIdleInterface && ! isExternal)
         {
+<<<<<<< HEAD
             const IdleMessage msg = { IdleMessage::kMessageGestureBegin, parameterIndex, 0, 0.0f };
+=======
+            const IdleMessage msg = { IdleMessage::kMessageGestureBegin, parameterIndex, 0.0f };
+>>>>>>> 673ef10e0 (Add LV2 wrapper)
             const ScopedLock sl(idleMessagesLock);
             idleMessages.add(msg);
         }
@@ -633,7 +614,11 @@ public:
        #if JUCE_LINUX
         if (hostHasIdleInterface && ! isExternal)
         {
+<<<<<<< HEAD
             const IdleMessage msg = { IdleMessage::kMessageGestureEnd, parameterIndex, 0, 0.0f };
+=======
+            const IdleMessage msg = { IdleMessage::kMessageGestureEnd, parameterIndex, 0.0f };
+>>>>>>> 673ef10e0 (Add LV2 wrapper)
             const ScopedLock sl(idleMessagesLock);
             idleMessages.add(msg);
         }
@@ -644,6 +629,7 @@ public:
         }
     }
 
+<<<<<<< HEAD
     void parentWindowSizeChanged(int cw, int ch) override
     {
         if (uiResize == nullptr)
@@ -663,6 +649,8 @@ public:
         }
     }
 
+=======
+>>>>>>> 673ef10e0 (Add LV2 wrapper)
     void timerCallback()
     {
         if (externalUI != nullptr && externalUI->isClosed())
@@ -700,9 +688,12 @@ public:
         }
         else
         {
+<<<<<<< HEAD
             if (editor == nullptr)
                 editor = std::unique_ptr<AudioProcessorEditor>(filter->createEditorIfNeeded());
 
+=======
+>>>>>>> 673ef10e0 (Add LV2 wrapper)
             resetParentUI (features);
             *widget = parentContainer->getWindowHandle();
         }
@@ -747,13 +738,20 @@ private:
     struct IdleMessage {
         enum {
             kMessageParameterChanged,
+<<<<<<< HEAD
             kMessageSizeChanged,
+=======
+>>>>>>> 673ef10e0 (Add LV2 wrapper)
             kMessageGestureBegin,
             kMessageGestureEnd,
         } type;
         int index;
+<<<<<<< HEAD
         int valuei;
         float valuef;
+=======
+        float value;
+>>>>>>> 673ef10e0 (Add LV2 wrapper)
     };
     Array<IdleMessage> idleMessages;
     CriticalSection idleMessagesLock;
@@ -807,14 +805,22 @@ private:
         if (parent != nullptr)
         {
             if (parentContainer == nullptr)
+<<<<<<< HEAD
                 parentContainer = std::make_unique<JuceLv2ParentContainer> (editor, this);
+=======
+                parentContainer = std::make_unique<JuceLv2ParentContainer> (editor, uiResize);
+>>>>>>> 673ef10e0 (Add LV2 wrapper)
 
             parentContainer->setVisible (false);
 
             if (parentContainer->isOnDesktop())
                 parentContainer->removeFromDesktop();
 
+<<<<<<< HEAD
             parentContainer->addToDesktop (ComponentPeer::windowIsResizable, parent);
+=======
+            parentContainer->addToDesktop (0, parent);
+>>>>>>> 673ef10e0 (Add LV2 wrapper)
 
            #if JUCE_LINUX
             Window hostWindow = (Window) parent;
@@ -822,9 +828,13 @@ private:
             X11Symbols::getInstance()->xReparentWindow (display, editorWnd, hostWindow, 0, 0);
            #endif
 
+<<<<<<< HEAD
             if (uiResize != nullptr)
                 uiResize->ui_resize (uiResize->handle, parentContainer->getWidth(), parentContainer->getHeight());
 
+=======
+            parentContainer->reset (uiResize);
+>>>>>>> 673ef10e0 (Add LV2 wrapper)
             parentContainer->setVisible (true);
         }
     }
@@ -1117,6 +1127,7 @@ public:
 
                     if (lastControlValues[i] != curValue)
                     {
+<<<<<<< HEAD
                         if (AudioProcessorParameter* const param = filter->getParameters()[i])
                         {
                             param->setValue (curValue);
@@ -1124,6 +1135,9 @@ public:
                             inParameterChangedCallback = true;
                             param->sendValueChangedMessageToListeners (curValue);
                         }
+=======
+                        filter->setParameter (i, curValue);
+>>>>>>> 673ef10e0 (Add LV2 wrapper)
                         lastControlValues.setUnchecked (i, curValue);
                     }
                 }
