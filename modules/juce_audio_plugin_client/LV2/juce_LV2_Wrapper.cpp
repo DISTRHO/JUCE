@@ -1712,6 +1712,7 @@ static void juceLV2_selectProgram (LV2_Handle handle, uint32_t bank, uint32_t pr
     handlePtr->lv2SelectProgram(bank, program);
 }
 
+#if JucePlugin_WantsLV2State
 static LV2_State_Status juceLV2_SaveState (LV2_Handle handle, LV2_State_Store_Function store, LV2_State_Handle stateHandle,
                                            uint32_t, const LV2_Feature* const*)
 {
@@ -1723,6 +1724,7 @@ static LV2_State_Status juceLV2_RestoreState (LV2_Handle handle, LV2_State_Retri
 {
     return handlePtr->lv2RestoreState(retrieve, stateHandle, flags);
 }
+#endif
 
 #undef handlePtr
 
