@@ -333,7 +333,7 @@ endfunction()
 # ==================================================================================================
 
 function(_juce_get_all_plugin_kinds out)
-    set(${out} AU AUv3 AAX Standalone Unity VST VST3 PARENT_SCOPE)
+    set(${out} AU AUv3 AAX Standalone Unity VST VST3 LV2 PARENT_SCOPE)
 endfunction()
 
 function(_juce_get_platform_plugin_kinds out)
@@ -345,6 +345,11 @@ function(_juce_get_platform_plugin_kinds out)
 
     if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
         list(APPEND result AU)
+    endif()
+
+    # For now, only enabling LV2 builds on Linux
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        list(APPEND result LV2)
     endif()
 
     if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
@@ -470,8 +475,12 @@ function(_juce_add_plugin_wrapper_target format path out_path)
         if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
             _juce_link_frameworks("${target_name}" INTERFACE AudioUnit)
         endif()
-    elseif(format STREQUAL "AU")
-        _juce_link_frameworks("${target_name}" INTERFACE AudioUnit CoreAudioKit)
+    elseif(JUCE_ARG_FORMAT STREQUAL "AU")
+        find_library(AU_AudioUnit AudioUnit REQUIRED)
+        find_library(AU_CoreAudioKit CoreAudioKit REQUIRED)
+        target_link_libraries("${target_name}" INTERFACE ${AU_AudioUnit} ${AU_CoreAudioKit})
+    elseif(JUCE_ARG_FORMAT STREQUAL "LV2")
+        set(ttl_generator ${JUCE_ARG_PATH}/LV2/generate-lv2-ttl.py CACHE INTERNAL "ttl generator")
     endif()
 endfunction()
 
@@ -1337,6 +1346,25 @@ function(_juce_set_plugin_target_properties shared_code_target kind)
         endif()
 
         _juce_copy_after_build(${shared_code_target} ${target_name} "${output_path}" JUCE_VST3_COPY_DIR)
+    elseif(kind STREQUAL "LV2")
+        set_target_properties(${target_name} PROPERTIES
+            BUNDLE_EXTENSION lv2
+            PREFIX ""
+            SUFFIX .lv2
+            BUNDLE TRUE)
+
+        set(output_path "${products_folder}/${product_name}.lv2")
+
+        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            set_target_properties(${target_name} PROPERTIES
+                SUFFIX .so
+                LIBRARY_OUTPUT_DIRECTORY "${output_path}")
+        endif()
+
+        add_custom_command(TARGET ${target_name} POST_BUILD
+            COMMAND python3 ${ttl_generator} "${output_path}/${shared_code_target}.so"
+            DEPENDS ${target_name}
+            VERBATIM)
     elseif(kind STREQUAL "VST")
         set_target_properties(${target_name} PROPERTIES
             BUNDLE_EXTENSION vst
@@ -1449,6 +1477,8 @@ function(_juce_get_plugin_kind_name kind out_var)
         set(${out_var} "VST" PARENT_SCOPE)
     elseif(kind STREQUAL "VST3")
         set(${out_var} "VST3" PARENT_SCOPE)
+    elseif(kind STREQUAL "LV2")
+        set(${out_var} "LV2" PARENT_SCOPE)
     endif()
 endfunction()
 
@@ -1603,6 +1633,7 @@ function(_juce_configure_plugin_targets target)
         JucePlugin_VSTUniqueID=JucePlugin_PluginCode
         JucePlugin_VSTCategory=$<TARGET_PROPERTY:${target},JUCE_VST2_CATEGORY>
         JucePlugin_Vst3Category="${vst3_category_string}"
+        JucePlugin_LV2URI=$<TARGET_PROPERTY:${target},JUCE_LV2_URI>
         JucePlugin_AUMainType=$<TARGET_PROPERTY:${target},JUCE_AU_MAIN_TYPE_CODE>
         JucePlugin_AUSubType=JucePlugin_PluginCode
         JucePlugin_AUExportPrefix=$<TARGET_PROPERTY:${target},JUCE_AU_EXPORT_PREFIX>

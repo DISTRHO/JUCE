@@ -86,7 +86,7 @@ using namespace juce;
 static const String& getPluginURI()
 {
     // JucePlugin_LV2URI might be defined as a function (eg. allowing dynamic URIs based on filename)
-    static const String pluginURI(JucePlugin_LV2URI);
+    static const String pluginURI { JucePlugin_LV2URI };
     return pluginURI;
 }
 
