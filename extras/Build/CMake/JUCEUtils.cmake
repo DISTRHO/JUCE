@@ -63,6 +63,10 @@ define_property(TARGET PROPERTY JUCE_VST3_COPY_DIR INHERITED
     BRIEF_DOCS "Install location for VST3 plugins"
     FULL_DOCS "This is where the plugin will be copied if plugin copying is enabled")
 
+define_property(TARGET PROPERTY JUCE_LV2_COPY_DIR INHERITED
+    BRIEF_DOCS "Install location for LV2 plugins"
+    FULL_DOCS "This is where the plugin will be copied if plugin copying is enabled")
+
 define_property(TARGET PROPERTY JUCE_AU_COPY_DIR INHERITED
     BRIEF_DOCS "Install location for AU plugins"
     FULL_DOCS "This is where the plugin will be copied if plugin copying is enabled")
@@ -180,6 +184,7 @@ function(_juce_set_default_properties)
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         set_property(GLOBAL PROPERTY JUCE_VST_COPY_DIR  "$ENV{HOME}/.vst")
         set_property(GLOBAL PROPERTY JUCE_VST3_COPY_DIR "$ENV{HOME}/.vst3")
+        set_property(GLOBAL PROPERTY JUCE_LV2_COPY_DIR "$ENV{HOME}/.lv2")
     endif()
 endfunction()
 
@@ -479,8 +484,6 @@ function(_juce_add_plugin_wrapper_target format path out_path)
         find_library(AU_AudioUnit AudioUnit REQUIRED)
         find_library(AU_CoreAudioKit CoreAudioKit REQUIRED)
         target_link_libraries("${target_name}" INTERFACE ${AU_AudioUnit} ${AU_CoreAudioKit})
-    elseif(JUCE_ARG_FORMAT STREQUAL "LV2")
-        set(ttl_generator ${JUCE_ARG_PATH}/LV2/generate-lv2-ttl.py CACHE INTERNAL "ttl generator")
     endif()
 endfunction()
 
@@ -1351,20 +1354,34 @@ function(_juce_set_plugin_target_properties shared_code_target kind)
             BUNDLE_EXTENSION lv2
             PREFIX ""
             SUFFIX .lv2
-            BUNDLE TRUE)
+            BUNDLE TRUE
+            XCODE_ATTRIBUTE_WRAPPER_EXTENSION lv2
+            XCODE_ATTRIBUTE_LIBRARY_STYLE Bundle
+            XCODE_ATTRIBUTE_GENERATE_PKGINFO_FILE YES)
+
+        _juce_create_windows_package(${shared_code_target} ${target_name} lv2 "" x86-win x86_64-win)
 
         set(output_path "${products_folder}/${product_name}.lv2")
 
         if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            # On linux we assume that the output arch is the same as the that of the host platform
+            set(is_platform_x64 $<EQUAL:${CMAKE_SIZEOF_VOID_P},8>)
+            set(arch_string $<IF:${is_platform_x64},x86_64,i386>)
+
             set_target_properties(${target_name} PROPERTIES
                 SUFFIX .so
                 LIBRARY_OUTPUT_DIRECTORY "${output_path}")
         endif()
 
+        # generate .ttl files
+        add_executable(lv2_ttl_generator ${JUCE_SOURCE_DIR}/extras/Build/lv2_ttl_generator/lv2_ttl_generator.c)
+        target_link_libraries(lv2_ttl_generator dl)
         add_custom_command(TARGET ${target_name} POST_BUILD
-            COMMAND python3 ${ttl_generator} "${output_path}/${shared_code_target}.so"
-            DEPENDS ${target_name}
+            COMMAND lv2_ttl_generator "${output_path}/${shared_code_target}.so"
+            DEPENDS ${target_name} lv2_ttl_generator
             VERBATIM)
+
+        _juce_copy_after_build(${shared_code_target} ${target_name} "${output_path}" JUCE_LV2_COPY_DIR)
     elseif(kind STREQUAL "VST")
         set_target_properties(${target_name} PROPERTIES
             BUNDLE_EXTENSION vst
@@ -1798,6 +1815,13 @@ function(_juce_set_fallback_properties target)
         _juce_set_property_if_not_set(${target} VST3_CATEGORIES Fx)
     endif()
 
+    # LV2_CATEGORIES
+    if(is_synth)
+        _juce_set_property_if_not_set(${target} LV2_CATEGORIES InstrumentPlugin)
+    else()
+        _juce_set_property_if_not_set(${target} LV2_CATEGORIES Plugin)
+    endif()
+
     # VST2_CATEGORY
     if(is_synth)
         _juce_set_property_if_not_set(${target} VST2_CATEGORY kPlugCategSynth)
@@ -1981,6 +2005,7 @@ function(_juce_initialise_target target)
 
         VST_COPY_DIR
         VST3_COPY_DIR
+        LV2_COPY_DIR
         AAX_COPY_DIR
         AU_COPY_DIR
         UNITY_COPY_DIR
@@ -2025,6 +2050,7 @@ function(_juce_initialise_target target)
         COMPANY_COPYRIGHT
         VST_COPY_DIR
         VST3_COPY_DIR
+        LV2_COPY_DIR
         AU_COPY_DIR
         AAX_COPY_DIR
         UNITY_COPY_DIR
