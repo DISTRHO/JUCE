@@ -1379,6 +1379,7 @@ function(_juce_set_plugin_target_properties shared_code_target kind)
         add_custom_command(TARGET ${target_name} POST_BUILD
             COMMAND lv2_ttl_generator "${output_path}/${shared_code_target}.so"
             DEPENDS ${target_name} lv2_ttl_generator
+            WORKING_DIRECTORY "${products_folder}/${product_name}.lv2/"
             VERBATIM)
 
         _juce_copy_after_build(${shared_code_target} ${target_name} "${output_path}" JUCE_LV2_COPY_DIR)
