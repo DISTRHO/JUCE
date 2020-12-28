@@ -1997,6 +1997,7 @@ function(_juce_initialise_target target)
         VST_NUM_MIDI_INS
         VST_NUM_MIDI_OUTS
         VST2_CATEGORY
+        LV2_URI
         AU_MAIN_TYPE
         AU_EXPORT_PREFIX
         AU_SANDBOX_SAFE
