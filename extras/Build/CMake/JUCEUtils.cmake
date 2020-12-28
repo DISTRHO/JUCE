@@ -1651,7 +1651,7 @@ function(_juce_configure_plugin_targets target)
         JucePlugin_VSTUniqueID=JucePlugin_PluginCode
         JucePlugin_VSTCategory=$<TARGET_PROPERTY:${target},JUCE_VST2_CATEGORY>
         JucePlugin_Vst3Category="${vst3_category_string}"
-        JucePlugin_LV2URI=$<TARGET_PROPERTY:${target},JUCE_LV2_URI>
+        JucePlugin_LV2URI="$<TARGET_PROPERTY:${target},JUCE_LV2_URI>"
         JucePlugin_AUMainType=$<TARGET_PROPERTY:${target},JUCE_AU_MAIN_TYPE_CODE>
         JucePlugin_AUSubType=JucePlugin_PluginCode
         JucePlugin_AUExportPrefix=$<TARGET_PROPERTY:${target},JUCE_AU_EXPORT_PREFIX>
