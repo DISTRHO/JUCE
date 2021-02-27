@@ -203,11 +203,11 @@ struct SharedMessageThread  : public Thread
     void run() override
     {
         initialiseJuce_GUI();
-        initialised = true;
 
         MessageManager::getInstance()->setCurrentThreadAsMessageThread();
 
         XWindowSystem::getInstance();
+        initialised = true;
 
         while ((! threadShouldExit()) && MessageManager::getInstance()->runDispatchLoopUntil (250))
         {}
