@@ -20,6 +20,10 @@
   ==============================================================================
 */
 
+#if JUCE_MINGW && !defined(_GLIBCXX_HAS_GTHREADS)
+#include "mingw-std-threads/mingw.condition_variable.h"
+#endif
+
 namespace juce
 {
 
