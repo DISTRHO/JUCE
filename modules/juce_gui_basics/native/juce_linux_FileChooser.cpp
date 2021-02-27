@@ -26,6 +26,7 @@
 namespace juce
 {
 
+#if JUCE_MODAL_LOOPS_PERMITTED
 static bool exeIsAvailable (String executable)
 {
     ChildProcess child;
@@ -245,10 +246,11 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Native)
 };
+#endif
 
 bool FileChooser::isPlatformDialogAvailable()
 {
-   #if JUCE_DISABLE_NATIVE_FILECHOOSERS
+   #if JUCE_DISABLE_NATIVE_FILECHOOSERS || ! JUCE_MODAL_LOOPS_PERMITTED
     return false;
    #else
     static bool canUseNativeBox = exeIsAvailable ("zenity") || exeIsAvailable ("kdialog");
@@ -258,7 +260,11 @@ bool FileChooser::isPlatformDialogAvailable()
 
 FileChooser::Pimpl* FileChooser::showPlatformDialog (FileChooser& owner, int flags, FilePreviewComponent*)
 {
+#if JUCE_MODAL_LOOPS_PERMITTED
     return new Native (owner, flags);
+#else
+    return nullptr;
+#endif
 }
 
 } // namespace juce
