@@ -47,7 +47,7 @@
  #endif
 #endif
 
-#if (JUCE_PLUGINHOST_VST || JUCE_PLUGINHOST_VST3) && JUCE_LINUX
+#if (JUCE_PLUGINHOST_VST || JUCE_PLUGINHOST_VST3) && JUCE_LINUX && ! JUCE_AUDIOPROCESSOR_NO_GUI
  #include <X11/Xlib.h>
  #include <X11/Xutil.h>
  #include <sys/utsname.h>
@@ -230,9 +230,11 @@ struct AutoResizingNSViewComponentWithParent  : public AutoResizingNSViewCompone
 #include "format_types/juce_LegacyAudioParameter.cpp"
 #include "processors/juce_AudioProcessor.cpp"
 #include "processors/juce_AudioPluginInstance.cpp"
-#include "processors/juce_AudioProcessorEditor.cpp"
 #include "processors/juce_AudioProcessorGraph.cpp"
-#include "processors/juce_GenericAudioProcessorEditor.cpp"
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
+ #include "processors/juce_AudioProcessorEditor.cpp"
+ #include "processors/juce_GenericAudioProcessorEditor.cpp"
+#endif
 #include "processors/juce_PluginDescription.cpp"
 #include "format_types/juce_LADSPAPluginFormat.cpp"
 #include "format_types/juce_VSTPluginFormat.cpp"
