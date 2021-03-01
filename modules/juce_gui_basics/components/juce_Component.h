@@ -2284,6 +2284,17 @@ public:
     */
     bool getViewportIgnoreDragFlag() const noexcept                     { return flags.viewportIgnoreDragFlag; }
 
+    virtual float getPixelScaling() const { return 1.0f; }
+    float getTotalPixelScaling() const {
+      const Component* component = this;
+      float pixel_scaling = 1.0f;
+      while (component) {
+        pixel_scaling *= component->getPixelScaling();
+        component = component->getParentComponent();
+      }
+      return pixel_scaling;
+    }
+
 private:
     //==============================================================================
     friend class ComponentPeer;

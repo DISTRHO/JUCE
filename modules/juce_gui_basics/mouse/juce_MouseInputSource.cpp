@@ -61,7 +61,7 @@ public:
     {
         if (auto* peer = comp.getPeer())
         {
-            pos = peer->globalToLocal (pos);
+            pos = peer->globalToLocal (pos) * comp.getTotalPixelScaling();
             auto& peerComp = peer->getComponent();
             return comp.getLocalPoint (&peerComp, ScalingHelpers::unscaledScreenPosToScaled (peerComp, pos));
         }
