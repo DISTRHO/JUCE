@@ -1816,7 +1816,7 @@ public:
             if (peerIsDeleted)
                 return S_FALSE;
 
-            peer.handleDragExit (dragInfo);
+            peer.handleDragDrop (dragInfo);
             return S_OK;
         }
 

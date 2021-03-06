@@ -439,7 +439,7 @@ public:
 
         @see setBounds, ComponentListener::componentMovedOrResized
     */
-    void setTopLeftPosition (Point<int> newTopLeftPosition);
+    virtual void setTopLeftPosition (Point<int> newTopLeftPosition);
 
     /** Moves the component to a new position.
 
