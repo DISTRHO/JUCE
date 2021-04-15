@@ -205,7 +205,6 @@ struct SharedMessageThread  : public Thread
         initialiseJuce_GUI();
 
         MessageManager::getInstance()->setCurrentThreadAsMessageThread();
-        initialised = true;
 
         XWindowSystem::getInstance();
         initialised = true;
