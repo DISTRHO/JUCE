@@ -1373,10 +1373,12 @@ function(_juce_set_plugin_target_properties shared_code_target kind)
 
         # generate .ttl files
         add_executable(lv2_ttl_generator ${JUCE_SOURCE_DIR}/extras/Build/lv2_ttl_generator/lv2_ttl_generator.c)
-        target_link_libraries(lv2_ttl_generator dl)
+        set_source_files_properties(${JUCE_SOURCE_DIR}/extras/Build/lv2_ttl_generator/lv2_ttl_generator.c PROPERTIES LANGUAGE CXX)
+        target_link_libraries(lv2_ttl_generator ${CMAKE_DL_LIBS})
+
         add_custom_command(TARGET ${target_name} POST_BUILD
-            COMMAND lv2_ttl_generator "${output_path}/${shared_code_target}.so"
-            DEPENDS ${target_name} lv2_ttl_generator
+            COMMAND lv2_ttl_generator "$<TARGET_FILE:${target_name}>"
+            COMMENT "Generating LV2 Turtle manifest files for ${target_name}"
             WORKING_DIRECTORY "${products_folder}/${product_name}.lv2/"
             VERBATIM)
 
