@@ -319,7 +319,7 @@ static const String makePluginFile (AudioProcessor* const filter, const int maxN
     }
 
     // Parameters
-    for (int i=0; i < filter->getNumParameters(); ++i)
+    for (int i=0; i < filter->getParameters().size(); ++i)
     {
         if (i == 0)
             text += "    lv2:port [\n";
@@ -342,7 +342,7 @@ static const String makePluginFile (AudioProcessor* const filter, const int maxN
         if (! filter->isParameterAutomatable(i))
             text += "        lv2:portProperty <" LV2_PORT_PROPS__expensive "> ;\n";
 
-        if (i+1 == filter->getNumParameters())
+        if (i+1 == filter->getParameters().size())
             text += "    ] ;\n\n";
         else
             text += "    ] ,\n";
@@ -422,7 +422,7 @@ static const String makePresetsFile (AudioProcessor* const filter)
         preset += "            rdf:value \"" + chunkString + "\"^^xsd:base64Binary ;\n";
         preset += "        ] ;\n";
  #endif
-        if (filter->getNumParameters() == 0)
+        if (filter->getParameters().size() == 0)
         {
             preset += "    ] .\n\n";
             continue;
@@ -434,7 +434,7 @@ static const String makePresetsFile (AudioProcessor* const filter)
         // Port values
         usedSymbols.clear();
 
-        for (int j=0; j < filter->getNumParameters(); ++j)
+        for (int j=0; j < filter->getParameters().size(); ++j)
         {
               if (j == 0)
                 preset += "    lv2:port [\n";
@@ -444,7 +444,7 @@ static const String makePresetsFile (AudioProcessor* const filter)
             preset += "        lv2:symbol \"" + nameToSymbol(filter->getParameterName(j), j) + "\" ;\n";
             preset += "        pset:value " + String::formatted("%f", safeParamValue(filter->getParameter(j))) + " ;\n";
 
-            if (j+1 == filter->getNumParameters())
+            if (j+1 == filter->getParameters().size())
                 preset += "    ] ";
             else
                 preset += "    ] ,\n";

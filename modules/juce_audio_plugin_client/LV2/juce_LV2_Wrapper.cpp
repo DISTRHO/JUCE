@@ -86,7 +86,7 @@ using namespace juce;
 static const String& getPluginURI()
 {
     // JucePlugin_LV2URI might be defined as a function (eg. allowing dynamic URIs based on filename)
-    static const String pluginURI(JucePlugin_LV2URI);
+    static const String pluginURI { JucePlugin_LV2URI };
     return pluginURI;
 }
 
@@ -900,9 +900,9 @@ public:
 
         portAudioIns.insertMultiple (0, nullptr, numInChans);
         portAudioOuts.insertMultiple (0, nullptr, numOutChans);
-        portControls.insertMultiple (0, nullptr, filter->getNumParameters());
+        portControls.insertMultiple (0, nullptr, filter->getParameters().size());
 
-        for (int i=0; i < filter->getNumParameters(); ++i)
+        for (int i=0; i < filter->getParameters().size(); ++i)
             lastControlValues.add (filter->getParameter(i));
 
         curPosInfo.resetToDefault();
@@ -1052,7 +1052,7 @@ public:
             }
         }
 
-        for (int i=0; i < filter->getNumParameters(); ++i)
+        for (int i=0; i < filter->getParameters().size(); ++i)
         {
             if (portId == index++)
             {

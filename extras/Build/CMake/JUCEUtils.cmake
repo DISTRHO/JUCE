@@ -63,6 +63,10 @@ define_property(TARGET PROPERTY JUCE_VST3_COPY_DIR INHERITED
     BRIEF_DOCS "Install location for VST3 plugins"
     FULL_DOCS "This is where the plugin will be copied if plugin copying is enabled")
 
+define_property(TARGET PROPERTY JUCE_LV2_COPY_DIR INHERITED
+    BRIEF_DOCS "Install location for LV2 plugins"
+    FULL_DOCS "This is where the plugin will be copied if plugin copying is enabled")
+
 define_property(TARGET PROPERTY JUCE_AU_COPY_DIR INHERITED
     BRIEF_DOCS "Install location for AU plugins"
     FULL_DOCS "This is where the plugin will be copied if plugin copying is enabled")
@@ -180,6 +184,7 @@ function(_juce_set_default_properties)
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         set_property(GLOBAL PROPERTY JUCE_VST_COPY_DIR  "$ENV{HOME}/.vst")
         set_property(GLOBAL PROPERTY JUCE_VST3_COPY_DIR "$ENV{HOME}/.vst3")
+        set_property(GLOBAL PROPERTY JUCE_LV2_COPY_DIR "$ENV{HOME}/.lv2")
     endif()
 endfunction()
 
@@ -333,7 +338,7 @@ endfunction()
 # ==================================================================================================
 
 function(_juce_get_all_plugin_kinds out)
-    set(${out} AU AUv3 AAX Standalone Unity VST VST3 PARENT_SCOPE)
+    set(${out} AU AUv3 AAX Standalone Unity VST VST3 LV2 PARENT_SCOPE)
 endfunction()
 
 function(_juce_get_platform_plugin_kinds out)
@@ -345,6 +350,11 @@ function(_juce_get_platform_plugin_kinds out)
 
     if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
         list(APPEND result AU)
+    endif()
+
+    # For now, only enabling LV2 builds on Linux
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        list(APPEND result LV2)
     endif()
 
     if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
@@ -1337,6 +1347,42 @@ function(_juce_set_plugin_target_properties shared_code_target kind)
         endif()
 
         _juce_copy_after_build(${shared_code_target} ${target_name} "${output_path}" JUCE_VST3_COPY_DIR)
+    elseif(kind STREQUAL "LV2")
+        set_target_properties(${target_name} PROPERTIES
+            BUNDLE_EXTENSION lv2
+            PREFIX ""
+            SUFFIX .lv2
+            BUNDLE TRUE
+            XCODE_ATTRIBUTE_WRAPPER_EXTENSION lv2
+            XCODE_ATTRIBUTE_LIBRARY_STYLE Bundle
+            XCODE_ATTRIBUTE_GENERATE_PKGINFO_FILE YES)
+
+        _juce_create_windows_package(${shared_code_target} ${target_name} lv2 "" x86-win x86_64-win)
+
+        set(output_path "${products_folder}/${product_name}.lv2")
+
+        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            # On linux we assume that the output arch is the same as the that of the host platform
+            set(is_platform_x64 $<EQUAL:${CMAKE_SIZEOF_VOID_P},8>)
+            set(arch_string $<IF:${is_platform_x64},x86_64,i386>)
+
+            set_target_properties(${target_name} PROPERTIES
+                SUFFIX .so
+                LIBRARY_OUTPUT_DIRECTORY "${output_path}")
+        endif()
+
+        # generate .ttl files
+        add_executable(lv2_ttl_generator ${JUCE_SOURCE_DIR}/extras/Build/lv2_ttl_generator/lv2_ttl_generator.c)
+        set_source_files_properties(${JUCE_SOURCE_DIR}/extras/Build/lv2_ttl_generator/lv2_ttl_generator.c PROPERTIES LANGUAGE CXX)
+        target_link_libraries(lv2_ttl_generator ${CMAKE_DL_LIBS})
+
+        add_custom_command(TARGET ${target_name} POST_BUILD
+            COMMAND lv2_ttl_generator "$<TARGET_FILE:${target_name}>"
+            COMMENT "Generating LV2 Turtle manifest files for ${target_name}"
+            WORKING_DIRECTORY "${products_folder}/${product_name}.lv2/"
+            VERBATIM)
+
+        _juce_copy_after_build(${shared_code_target} ${target_name} "${output_path}" JUCE_LV2_COPY_DIR)
     elseif(kind STREQUAL "VST")
         set_target_properties(${target_name} PROPERTIES
             BUNDLE_EXTENSION vst
@@ -1449,6 +1495,8 @@ function(_juce_get_plugin_kind_name kind out_var)
         set(${out_var} "VST" PARENT_SCOPE)
     elseif(kind STREQUAL "VST3")
         set(${out_var} "VST3" PARENT_SCOPE)
+    elseif(kind STREQUAL "LV2")
+        set(${out_var} "LV2" PARENT_SCOPE)
     endif()
 endfunction()
 
@@ -1603,6 +1651,7 @@ function(_juce_configure_plugin_targets target)
         JucePlugin_VSTUniqueID=JucePlugin_PluginCode
         JucePlugin_VSTCategory=$<TARGET_PROPERTY:${target},JUCE_VST2_CATEGORY>
         JucePlugin_Vst3Category="${vst3_category_string}"
+        JucePlugin_LV2URI="$<TARGET_PROPERTY:${target},JUCE_LV2_URI>"
         JucePlugin_AUMainType=$<TARGET_PROPERTY:${target},JUCE_AU_MAIN_TYPE_CODE>
         JucePlugin_AUSubType=JucePlugin_PluginCode
         JucePlugin_AUExportPrefix=$<TARGET_PROPERTY:${target},JUCE_AU_EXPORT_PREFIX>
@@ -1765,6 +1814,13 @@ function(_juce_set_fallback_properties target)
         _juce_set_property_if_not_set(${target} VST3_CATEGORIES Instrument Synth)
     else()
         _juce_set_property_if_not_set(${target} VST3_CATEGORIES Fx)
+    endif()
+
+    # LV2_CATEGORIES
+    if(is_synth)
+        _juce_set_property_if_not_set(${target} LV2_CATEGORIES InstrumentPlugin)
+    else()
+        _juce_set_property_if_not_set(${target} LV2_CATEGORIES Plugin)
     endif()
 
     # VST2_CATEGORY
@@ -1941,6 +1997,7 @@ function(_juce_initialise_target target)
         VST_NUM_MIDI_INS
         VST_NUM_MIDI_OUTS
         VST2_CATEGORY
+        LV2_URI
         AU_MAIN_TYPE
         AU_EXPORT_PREFIX
         AU_SANDBOX_SAFE
@@ -1950,6 +2007,7 @@ function(_juce_initialise_target target)
 
         VST_COPY_DIR
         VST3_COPY_DIR
+        LV2_COPY_DIR
         AAX_COPY_DIR
         AU_COPY_DIR
         UNITY_COPY_DIR
@@ -1994,6 +2052,7 @@ function(_juce_initialise_target target)
         COMPANY_COPYRIGHT
         VST_COPY_DIR
         VST3_COPY_DIR
+        LV2_COPY_DIR
         AU_COPY_DIR
         AAX_COPY_DIR
         UNITY_COPY_DIR
