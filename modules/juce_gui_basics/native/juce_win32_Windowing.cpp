@@ -1667,8 +1667,10 @@ public:
         // do this first to avoid messages arriving for this window before it's destroyed
         JuceWindowIdentifier::setAsJUCEWindow (hwnd, false);
 
+       #if JUCE_MSVC
         if (isAccessibilityActive)
             WindowsAccessibility::revokeUIAMapEntriesForWindow (hwnd);
+       #endif
 
         shadower = nullptr;
         currentTouches.deleteAllTouchesForPeer (this);
@@ -4246,6 +4248,7 @@ private:
             case WM_GETDLGCODE:
                 return DLGC_WANTALLKEYS;
 
+           #if JUCE_MSVC
             case WM_GETOBJECT:
             {
                 if (static_cast<long> (lParam) == WindowsAccessibility::getUiaRootObjectId())
@@ -4264,6 +4267,7 @@ private:
 
                 break;
             }
+           #endif
             default:
                 break;
         }
