@@ -154,7 +154,7 @@ protected:
 private:
     friend class TopLevelWindowManager;
     friend class ResizableWindow;
-    bool useDropShadow = true, useNativeTitleBar = false, isCurrentlyActive = false;
+    bool useDropShadow = true, useNativeTitleBar = true, isCurrentlyActive = false;
     std::unique_ptr<DropShadower> shadower;
 
     std::unique_ptr<AccessibilityHandler> createAccessibilityHandler() override;
