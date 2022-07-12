@@ -83,7 +83,14 @@ namespace juce
     X (glCheckFramebufferStatus) \
     X (glFramebufferTexture2D) \
     X (glFramebufferRenderbuffer) \
-    X (glGetFramebufferAttachmentParameteriv)
+    X (glGetFramebufferAttachmentParameteriv) \
+    X (glTransformFeedbackVaryings) \
+    X (glBeginTransformFeedback) \
+    X (glEndTransformFeedback) \
+    X (glBindBufferBase) \
+    X (glMapBufferRange) \
+    X (glUnmapBuffer)
+ 
 
 /** @internal This macro contains a list of GL extension functions that need to be dynamically loaded on Windows/Linux.
     @see OpenGLExtensionFunctions
