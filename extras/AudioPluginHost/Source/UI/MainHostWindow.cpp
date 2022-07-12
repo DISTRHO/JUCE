@@ -933,7 +933,7 @@ void MainHostWindow::showAudioSettings()
     o.componentToCentreAround       = this;
     o.dialogBackgroundColour        = getLookAndFeel().findColour (ResizableWindow::backgroundColourId);
     o.escapeKeyTriggersCloseButton  = true;
-    o.useNativeTitleBar             = false;
+    o.useNativeTitleBar             = true;
     o.resizable                     = false;
 
      auto* w = o.create();

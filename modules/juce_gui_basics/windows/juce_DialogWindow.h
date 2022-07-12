@@ -199,7 +199,8 @@ public:
                             Colour backgroundColour,
                             bool escapeKeyTriggersCloseButton,
                             bool shouldBeResizable = false,
-                            bool useBottomRightCornerResizer = false);
+                            bool useBottomRightCornerResizer = false,
+                            bool useNativeTitleBar = true);
 
    #if JUCE_MODAL_LOOPS_PERMITTED
     /** Easy way of quickly showing a dialog box containing a given component.
@@ -245,7 +246,8 @@ public:
                                 Colour backgroundColour,
                                 bool escapeKeyTriggersCloseButton,
                                 bool shouldBeResizable = false,
-                                bool useBottomRightCornerResizer = false);
+                                bool useBottomRightCornerResizer = false,
+                                bool useNativeTitleBar = true);
    #endif
 
 

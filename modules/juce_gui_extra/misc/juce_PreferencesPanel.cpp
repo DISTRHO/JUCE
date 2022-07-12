@@ -92,7 +92,7 @@ void PreferencesPanel::showInDialogBox (const String& dialogTitle, int dialogWid
     o.dialogTitle                   = dialogTitle;
     o.dialogBackgroundColour        = backgroundColour;
     o.escapeKeyTriggersCloseButton  = false;
-    o.useNativeTitleBar             = false;
+    o.useNativeTitleBar             = true;
     o.resizable                     = false;
 
     o.launchAsync();
