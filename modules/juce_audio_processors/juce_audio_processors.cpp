@@ -34,7 +34,9 @@
 
 #define JUCE_CORE_INCLUDE_NATIVE_HEADERS 1
 #define JUCE_CORE_INCLUDE_OBJC_HELPERS 1
-#define JUCE_GUI_BASICS_INCLUDE_XHEADERS 1
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
+ #define JUCE_GUI_BASICS_INCLUDE_XHEADERS 1
+#endif
 #define JUCE_GUI_BASICS_INCLUDE_SCOPED_THREAD_DPI_AWARENESS_SETTER 1
 #define JUCE_GRAPHICS_INCLUDE_COREGRAPHICS_HELPERS 1
 
@@ -42,7 +44,7 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 
 //==============================================================================
-#if (JUCE_PLUGINHOST_VST || JUCE_PLUGINHOST_VST3) && (JUCE_LINUX || JUCE_BSD)
+#if (JUCE_PLUGINHOST_VST || JUCE_PLUGINHOST_VST3) && (JUCE_LINUX || JUCE_BSD) && ! JUCE_AUDIOPROCESSOR_NO_GUI
  #include <X11/Xlib.h>
  #include <X11/Xutil.h>
  #include <sys/utsname.h>
@@ -196,9 +198,11 @@ private:
 #include "format_types/juce_LegacyAudioParameter.cpp"
 #include "processors/juce_AudioProcessor.cpp"
 #include "processors/juce_AudioPluginInstance.cpp"
-#include "processors/juce_AudioProcessorEditor.cpp"
 #include "processors/juce_AudioProcessorGraph.cpp"
-#include "processors/juce_GenericAudioProcessorEditor.cpp"
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
+ #include "processors/juce_AudioProcessorEditor.cpp"
+ #include "processors/juce_GenericAudioProcessorEditor.cpp"
+#endif
 #include "processors/juce_PluginDescription.cpp"
 #include "format_types/juce_ARACommon.cpp"
 #include "format_types/juce_LADSPAPluginFormat.cpp"
@@ -206,9 +210,11 @@ private:
 #include "format_types/juce_VST3PluginFormat.cpp"
 #include "format_types/juce_AudioUnitPluginFormat.mm"
 #include "format_types/juce_ARAHosting.cpp"
-#include "scanning/juce_KnownPluginList.cpp"
-#include "scanning/juce_PluginDirectoryScanner.cpp"
-#include "scanning/juce_PluginListComponent.cpp"
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
+ #include "scanning/juce_KnownPluginList.cpp"
+ #include "scanning/juce_PluginDirectoryScanner.cpp"
+ #include "scanning/juce_PluginListComponent.cpp"
+#endif
 #include "processors/juce_AudioProcessorParameterGroup.cpp"
 #include "utilities/juce_AudioProcessorParameterWithID.cpp"
 #include "utilities/juce_RangedAudioParameter.cpp"
@@ -216,7 +222,9 @@ private:
 #include "utilities/juce_AudioParameterInt.cpp"
 #include "utilities/juce_AudioParameterBool.cpp"
 #include "utilities/juce_AudioParameterChoice.cpp"
-#include "utilities/juce_ParameterAttachments.cpp"
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
+ #include "utilities/juce_ParameterAttachments.cpp"
+#endif
 #include "utilities/juce_AudioProcessorValueTreeState.cpp"
 #include "utilities/juce_PluginHostType.cpp"
 #include "utilities/juce_NativeScaleFactorNotifier.cpp"
@@ -232,4 +240,9 @@ private:
  #if JUCE_PLUGINHOST_LV2
   #include "format_types/juce_LV2PluginFormat_test.cpp"
  #endif
+#endif
+
+#if JUCE_AUDIOPROCESSOR_NO_GUI
+// commonly used classes in DSP code
+namespace juce { Colour::Colour(juce::uint32) noexcept {} }
 #endif
