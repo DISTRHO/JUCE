@@ -90,8 +90,9 @@ target_compile_definitions(Projucer PRIVATE
     JUCE_LOAD_CURL_SYMBOLS_LAZILY=1
     JUCE_LOG_ASSERTIONS=1
     JUCE_STRICT_REFCOUNTEDPOINTER=1
-    JUCE_USE_CURL=1
-    JUCE_WEB_BROWSER=0)
+    JUCE_USE_CURL=0
+    JUCE_WEB_BROWSER=0
+    JUCER_ENABLE_GPL_MODE=1)
 
 juce_add_binary_data(ProjucerData SOURCES
     Source/BinaryData/Icons/background_logo.svg
