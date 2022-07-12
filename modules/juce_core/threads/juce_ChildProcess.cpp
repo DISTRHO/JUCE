@@ -81,6 +81,11 @@ String ChildProcess::readAllProcessOutput()
 }
 
 
+int ChildProcess::getPID() const noexcept
+{
+    return activeProcess != nullptr ? activeProcess->getPID() : 0;
+}
+
 //==============================================================================
 //==============================================================================
 #if JUCE_UNIT_TESTS

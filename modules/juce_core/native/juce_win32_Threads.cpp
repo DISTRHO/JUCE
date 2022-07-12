@@ -489,6 +489,11 @@ public:
         return (uint32) exitCode;
     }
 
+    int getPID() const noexcept
+    {
+        return 0;
+    }
+
     bool ok;
 
 private:

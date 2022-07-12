@@ -101,6 +101,8 @@ public:
     */
     bool kill();
 
+    int getPID() const noexcept;
+
 private:
     //==============================================================================
     class ActiveProcess;
