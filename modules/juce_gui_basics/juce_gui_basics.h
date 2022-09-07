@@ -319,7 +319,7 @@ namespace juce
 #include "accessibility/juce_AccessibilityHandler.h"
 
 #if JUCE_LINUX || JUCE_BSD
- #if JUCE_GUI_BASICS_INCLUDE_XHEADERS
+ #if JUCE_GUI_BASICS_INCLUDE_XHEADERS && !JUCE_AUDIOPROCESSOR_NO_GUI
   // If you're missing these headers, you need to install the libx11-dev package
   #include <X11/Xlib.h>
   #include <X11/Xatom.h>

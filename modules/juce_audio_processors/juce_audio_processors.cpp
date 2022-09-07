@@ -227,7 +227,9 @@ private:
 #endif
 #include "utilities/juce_AudioProcessorValueTreeState.cpp"
 #include "utilities/juce_PluginHostType.cpp"
-#include "utilities/juce_NativeScaleFactorNotifier.cpp"
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
+ #include "utilities/juce_NativeScaleFactorNotifier.cpp"
+#endif
 #include "utilities/ARA/juce_ARA_utils.cpp"
 
 #include "format_types/juce_LV2PluginFormat.cpp"
