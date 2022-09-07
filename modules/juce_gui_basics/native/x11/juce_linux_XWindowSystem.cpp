@@ -1146,6 +1146,33 @@ namespace DisplayHelpers
             }
         }
 
+        // KDE systems use a global scale factor as a variable in System Settings > Display and Monitor.
+        // This can be queried by passing the group and key to /bin/kreadconfig5.
+        // KDE must be detected before GNOME or Ubuntu as both /usr/bin/dconf and /usr/bin/gsettings
+        // can be installed by GTK applications and coexist within a KDE environment, but will not
+        // necessarily return the actual scale factor.
+        if (File ("/bin/kreadconfig5").existsAsFile())
+        {
+            // Get the global display scale factor for KDE systems
+            ChildProcess kreadconfig;
+
+            if (kreadconfig.start ("/bin/kreadconfig5 --group KScreen --key ScaleFactor", ChildProcess::wantStdOut))
+            {
+                if (kreadconfig.waitForProcessToFinish (200))
+                {
+                    auto kreadconfigOutput = StringArray::fromTokens (kreadconfig.readAllProcessOutput(), true);
+
+                    if (kreadconfigOutput.size() >= 2 && kreadconfigOutput[0].length() > 0)
+                    {
+                        auto scaleFactor = kreadconfigOutput[0].getDoubleValue();
+
+                        if (scaleFactor > 0.0)
+                            return scaleFactor;
+                    }
+                }
+            }
+        }
+
         if (name.isNotEmpty())
         {
             // Ubuntu and derived distributions now save a per-display scale factor as a configuration
