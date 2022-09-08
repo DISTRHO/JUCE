@@ -22,6 +22,7 @@
 
   ==============================================================================
 */
+#if !JUCE_AUDIOPROCESSOR_NO_GUI
 
 #ifdef JUCE_GUI_BASICS_H_INCLUDED
  /* When you add this cpp file to your project, you mustn't include it in a file where you've
@@ -416,4 +417,6 @@ bool juce::isWindowOnCurrentVirtualDesktop (void* x)
 
 #if JUCE_UNIT_TESTS
 #include "native/accessibility/juce_AccessibilityTextHelpers_test.cpp"
+#endif
+
 #endif

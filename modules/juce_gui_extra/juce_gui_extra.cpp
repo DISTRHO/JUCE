@@ -22,6 +22,7 @@
 
   ==============================================================================
 */
+#if !JUCE_AUDIOPROCESSOR_NO_GUI
 
 #ifdef JUCE_GUI_EXTRA_H_INCLUDED
  /* When you add this cpp file to your project, you mustn't include it in a file where you've
@@ -195,4 +196,6 @@
  juce::WindowsWebView2WebBrowserComponent::WindowsWebView2WebBrowserComponent (bool unloadWhenHidden,
                                                                                const WebView2Preferences&)
      : WebBrowserComponent (unloadWhenHidden) {}
+#endif
+
 #endif

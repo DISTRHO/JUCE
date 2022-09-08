@@ -23,6 +23,8 @@
   ==============================================================================
 */
 
+#if !JUCE_AUDIOPROCESSOR_NO_GUI
+
 #ifdef JUCE_GRAPHICS_H_INCLUDED
  /* When you add this cpp file to your project, you mustn't include it in a file where you've
     already included any other headers - just put it inside a file on its own, possibly with your config
@@ -180,4 +182,6 @@
  {
    #include "native/freetype/FreeTypeAmalgam.c"
  }
+#endif
+
 #endif
