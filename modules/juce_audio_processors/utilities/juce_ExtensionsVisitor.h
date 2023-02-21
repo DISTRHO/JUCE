@@ -63,7 +63,9 @@ typedef AudioComponentInstance AudioUnit;
     }
     @endcode
 */
+#ifndef _VESTIGE_H
 struct AEffect;
+#endif
 
 //==============================================================================
 namespace juce
