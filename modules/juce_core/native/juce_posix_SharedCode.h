@@ -1260,6 +1260,11 @@ public:
         return 0;
     }
 
+    int getPID() const noexcept
+    {
+        return childPID;
+    }
+
     int childPID = 0;
     int pipeHandle = 0;
     int exitCode = -1;
