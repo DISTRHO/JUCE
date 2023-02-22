@@ -234,7 +234,7 @@ endfunction()
 # ==================================================================================================
 
 function(_juce_get_all_plugin_kinds out)
-    set(${out} AU AUv3 AAX Standalone Unity VST VST3 PARENT_SCOPE)
+    set(${out} AU AUv3 AAX Standalone Unity VST VST3 LV2 PARENT_SCOPE)
 endfunction()
 
 function(_juce_get_platform_plugin_kinds out)
@@ -249,7 +249,7 @@ function(_juce_get_platform_plugin_kinds out)
     endif()
 
     if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
-        list(APPEND result AAX Unity VST VST3)
+        list(APPEND result AAX Unity VST VST3 LV2)
     endif()
 
     set(${out} ${result} PARENT_SCOPE)

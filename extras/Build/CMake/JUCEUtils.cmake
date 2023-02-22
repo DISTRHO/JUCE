@@ -75,6 +75,10 @@ define_property(TARGET PROPERTY JUCE_UNITY_COPY_DIR INHERITED
     BRIEF_DOCS "Install location for Unity plugins"
     FULL_DOCS "This is where the plugin will be copied if plugin copying is enabled")
 
+define_property(TARGET PROPERTY JUCE_LV2_COPY_DIR INHERITED
+    BRIEF_DOCS "Install location for LV2 plugins"
+    FULL_DOCS "This is where the plugin will be copied if plugin copying is enabled")
+
 define_property(TARGET PROPERTY JUCE_COPY_PLUGIN_AFTER_BUILD INHERITED
     BRIEF_DOCS "Whether or not plugins should be copied after building"
     FULL_DOCS "Whether or not plugins should be copied after building")
@@ -115,6 +119,7 @@ function(_juce_set_default_properties)
     elseif((CMAKE_SYSTEM_NAME STREQUAL "Linux") OR (CMAKE_SYSTEM_NAME MATCHES ".*BSD"))
         set_property(GLOBAL PROPERTY JUCE_VST_COPY_DIR  "$ENV{HOME}/.vst")
         set_property(GLOBAL PROPERTY JUCE_VST3_COPY_DIR "$ENV{HOME}/.vst3")
+        set_property(GLOBAL PROPERTY JUCE_LV2_COPY_DIR "$ENV{HOME}/.lv2")
     endif()
 endfunction()
 
@@ -916,6 +921,7 @@ function(_juce_set_plugin_target_properties shared_code_target kind)
     elseif(kind STREQUAL "VST")
         set_target_properties(${target_name} PROPERTIES
             BUNDLE_EXTENSION vst
+            PREFIX ""
             BUNDLE TRUE
             XCODE_ATTRIBUTE_WRAPPER_EXTENSION vst
             XCODE_ATTRIBUTE_LIBRARY_STYLE Bundle
@@ -928,6 +934,30 @@ function(_juce_set_plugin_target_properties shared_code_target kind)
         endif()
 
         _juce_set_copy_properties(${shared_code_target} ${target_name} "${output_path}" JUCE_VST_COPY_DIR)
+    elseif(kind STREQUAL "LV2")
+        set(output_path "${products_folder}/${product_name}.lv2")
+
+        set_target_properties(${target_name} PROPERTIES
+            BUNDLE_EXTENSION lv2
+            PREFIX ""
+            BUNDLE TRUE
+            LIBRARY_OUTPUT_DIRECTORY "${output_path}"
+            XCODE_ATTRIBUTE_WRAPPER_EXTENSION lv2
+            XCODE_ATTRIBUTE_LIBRARY_STYLE Bundle
+            XCODE_ATTRIBUTE_GENERATE_PKGINFO_FILE NO)
+
+        if(NOT SKIP_LV2_TTL_GENERATOR)
+            # generate .ttl files
+            add_executable(${target_name}_lv2_ttl_generator ${JUCE_CMAKE_UTILS_DIR}/lv2_ttl_generator.c)
+            target_link_libraries(${target_name}_lv2_ttl_generator dl)
+            add_custom_command(TARGET ${target_name} POST_BUILD
+                COMMAND ${CROSSCOMPILING_EMULATOR} "${CMAKE_CURRENT_BINARY_DIR}/${target_name}_lv2_ttl_generator" "./${product_name}${CMAKE_SHARED_LIBRARY_SUFFIX}"
+                DEPENDS ${target_name} ${target_name}_lv2_ttl_generator
+                WORKING_DIRECTORY "${output_path}"
+                VERBATIM)
+        endif()
+
+        _juce_set_copy_properties(${shared_code_target} ${target_name} "${output_path}" JUCE_LV2_COPY_DIR)
     elseif(kind STREQUAL "AU")
         set_target_properties(${target_name} PROPERTIES
             BUNDLE_EXTENSION component
@@ -1025,6 +1055,8 @@ function(_juce_get_plugin_kind_name kind out_var)
         set(${out_var} "VST" PARENT_SCOPE)
     elseif(kind STREQUAL "VST3")
         set(${out_var} "VST3" PARENT_SCOPE)
+    elseif(kind STREQUAL "LV2")
+        set(${out_var} "LV2" PARENT_SCOPE)
     endif()
 endfunction()
 
@@ -1181,6 +1213,7 @@ function(_juce_configure_plugin_targets target)
         JucePlugin_VSTUniqueID=JucePlugin_PluginCode
         JucePlugin_VSTCategory=$<TARGET_PROPERTY:${target},JUCE_VST2_CATEGORY>
         JucePlugin_Vst3Category="${vst3_category_string}"
+        JucePlugin_LV2URI="$<TARGET_PROPERTY:${target},JUCE_LV2_URI>"
         JucePlugin_AUMainType=$<TARGET_PROPERTY:${target},JUCE_AU_MAIN_TYPE_CODE>
         JucePlugin_AUSubType=JucePlugin_PluginCode
         JucePlugin_AUExportPrefix=$<TARGET_PROPERTY:${target},JUCE_AU_EXPORT_PREFIX>
@@ -1529,6 +1562,7 @@ function(_juce_initialise_target target)
         VST_NUM_MIDI_INS
         VST_NUM_MIDI_OUTS
         VST2_CATEGORY
+        LV2_URI
         AU_MAIN_TYPE
         AU_EXPORT_PREFIX
         AU_SANDBOX_SAFE
@@ -1538,6 +1572,7 @@ function(_juce_initialise_target target)
 
         VST_COPY_DIR
         VST3_COPY_DIR
+        LV2_COPY_DIR
         AAX_COPY_DIR
         AU_COPY_DIR
         UNITY_COPY_DIR
@@ -1586,6 +1621,7 @@ function(_juce_initialise_target target)
         COMPANY_COPYRIGHT
         VST_COPY_DIR
         VST3_COPY_DIR
+        LV2_COPY_DIR
         AU_COPY_DIR
         AAX_COPY_DIR
         UNITY_COPY_DIR
@@ -1608,7 +1644,6 @@ function(_juce_initialise_target target)
 
     target_include_directories(${target} PRIVATE
         $<TARGET_PROPERTY:${target},JUCE_GENERATED_SOURCES_DIRECTORY>)
-    target_link_libraries(${target} PUBLIC $<$<TARGET_EXISTS:juce_vst2_sdk>:juce_vst2_sdk>)
 
     get_target_property(is_pluginhost_au ${target} JUCE_PLUGINHOST_AU)
 
@@ -1761,15 +1796,11 @@ function(juce_add_pip header)
             list(APPEND extra_formats AAX)
         endif()
 
-        if(TARGET juce_vst2_sdk)
-            list(APPEND extra_formats VST)
-        endif()
-
         # Standalone plugins might want to access the mic
         list(APPEND extra_target_args MICROPHONE_PERMISSION_ENABLED TRUE)
 
         juce_add_plugin(${JUCE_PIP_NAME}
-            FORMATS AU AUv3 VST3 Unity Standalone ${extra_formats}
+            FORMATS AU AUv3 VST VST3 Unity Standalone ${extra_formats}
             ${extra_target_args})
     elseif(pip_kind STREQUAL "Component")
         set(source_main "${JUCE_CMAKE_UTILS_DIR}/PIPComponent.cpp.in")
@@ -1885,25 +1916,6 @@ function(juce_set_aax_sdk_path path)
         "${path}/Interfaces/ACF")
     target_compile_definitions(juce_aax_sdk INTERFACE JucePlugin_AAXLibs_path="${path}/Libs")
     set_target_properties(juce_aax_sdk PROPERTIES INTERFACE_JUCE_AAX_DEFAULT_ICON "${path}/Utilities/PlugIn.ico")
-endfunction()
-
-function(juce_set_vst2_sdk_path path)
-    if(TARGET juce_vst2_sdk)
-        message(FATAL_ERROR "juce_set_vst2_sdk_path should only be called once")
-    endif()
-
-    _juce_make_absolute(path)
-
-    if(NOT EXISTS "${path}")
-        message(FATAL_ERROR "Could not find VST2 SDK at the specified path: ${path}")
-    endif()
-
-    add_library(juce_vst2_sdk INTERFACE IMPORTED GLOBAL)
-
-    # This is a bit of a hack, but we really need the VST2 paths to always follow the VST3 paths.
-    target_include_directories(juce_vst2_sdk INTERFACE
-        $<TARGET_PROPERTY:juce::juce_vst3_headers,INTERFACE_INCLUDE_DIRECTORIES>
-        "${path}")
 endfunction()
 
 function(juce_set_vst3_sdk_path path)
