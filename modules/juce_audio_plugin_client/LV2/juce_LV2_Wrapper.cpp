@@ -854,6 +854,7 @@ public:
           numOutChans (0),
           bufferSize (2048),
           sampleRate (sampleRate_),
+          bypassParameter (nullptr),
           uridMap (nullptr),
           uridAtomBlank (0),
           uridAtomObject (0),
@@ -886,6 +887,9 @@ public:
 
         filter->setPlayConfigDetails (numInChans, numOutChans, 0, 0);
         filter->setPlayHead (this);
+        filter->refreshParameterList();
+
+        bypassParameter = filter->getBypassParameter();
 
 #if (JucePlugin_WantsMidiInput || JucePlugin_WantsLV2TimePos)
         portEventsIn = nullptr;
@@ -900,12 +904,14 @@ public:
         portLatency = nullptr;
 #endif
 
+        const Array<AudioProcessorParameter*>& parameters = filter->getParameters();
+
         portAudioIns.insertMultiple (0, nullptr, numInChans);
         portAudioOuts.insertMultiple (0, nullptr, numOutChans);
-        portControls.insertMultiple (0, nullptr, filter->getNumParameters());
+        portControls.insertMultiple (0, nullptr, parameters.size());
 
-        for (int i=0; i < filter->getNumParameters(); ++i)
-            lastControlValues.add (filter->getParameter(i));
+        for (int i=0; i < parameters.size(); ++i)
+            lastControlValues.add (parameters.getUnchecked(i)->getValue());
 
         curPosInfo.resetToDefault();
 
@@ -1054,7 +1060,9 @@ public:
             }
         }
 
-        for (int i=0; i < filter->getNumParameters(); ++i)
+        const Array<AudioProcessorParameter*>& parameters = filter->getParameters();
+
+        for (int i=0; i < parameters.size(); ++i)
         {
             if (portId == index++)
             {
@@ -1111,26 +1119,30 @@ public:
 
         // Check for updated parameters
         {
-            float curValue;
+            const Array<AudioProcessorParameter*>& parameters = filter->getParameters();
+            float value;
 
             for (int i = 0; i < portControls.size(); ++i)
             {
                 if (portControls[i] != nullptr)
                 {
-                    curValue = *portControls[i];
+                    value = *portControls[i];
 
-                    if (lastControlValues[i] != curValue)
+                    if (lastControlValues.getUnchecked (i) != value)
                     {
-                        if (AudioProcessorParameter* const param = filter->getParameters()[i])
-                        {
-                            param->setValue (curValue);
+                        lastControlValues.setUnchecked (i, value);
 
+                        if (AudioProcessorParameter* const param = parameters[i])
+                        {
+                            if (param == bypassParameter)
+                                value = 1.f - value;
+
+                            param->setValue (value);
                            #if ! JUCE_AUDIOPROCESSOR_NO_GUI
                             inParameterChangedCallback = true;
                            #endif
-                            param->sendValueChangedMessageToListeners (curValue);
+                            param->sendValueChangedMessageToListeners (value);
                         }
-                        lastControlValues.setUnchecked (i, curValue);
                     }
                 }
             }
@@ -1502,14 +1514,19 @@ public:
             filter->setCurrentProgram(realProgram);
 
             // update input control ports now
+            const Array<AudioProcessorParameter*>& parameters = filter->getParameters();
+            float value;
+
             for (int i = 0; i < portControls.size(); ++i)
             {
-                float value = filter->getParameter(i);
+                if (AudioProcessorParameter* const param = parameters[i])
+                {
+                    value = param->getValue();
+                    lastControlValues.setUnchecked (i, value);
 
-                if (portControls[i] != nullptr)
-                    *portControls[i] = value;
-
-                lastControlValues.set(i, value);
+                    if (float* const portControlPtr = portControls.getUnchecked(i))
+                        *portControlPtr = value;
+                }
             }
         }
     }
@@ -1658,6 +1675,7 @@ private:
     double sampleRate;
     Array<float> lastControlValues;
     AudioPlayHead::CurrentPositionInfo curPosInfo;
+    AudioProcessorParameter* bypassParameter;
 
     struct Lv2PositionData {
         int64_t  bar;

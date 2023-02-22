@@ -263,7 +263,7 @@ static const String makePluginFile (AudioProcessor* const filter, const int maxN
     text += "        lv2:minimum 0.0 ;\n";
     text += "        lv2:maximum 1.0 ;\n";
     text += "        lv2:designation <" LV2_CORE__freeWheeling "> ;\n";
-    text += "        lv2:portProperty lv2:toggled, <" LV2_PORT_PROPS__notOnGUI "> ;\n";
+    text += "        lv2:portProperty lv2:toggled , <" LV2_PORT_PROPS__notOnGUI "> ;\n";
     text += "    ] ;\n";
     text += "\n";
 
@@ -319,8 +319,14 @@ static const String makePluginFile (AudioProcessor* const filter, const int maxN
     }
 
     // Parameters
-    for (int i=0; i < filter->getNumParameters(); ++i)
+    const Array<AudioProcessorParameter*>& parameters = filter->getParameters();
+    AudioProcessorParameter* const bypassParameter = filter->getBypassParameter();
+
+    for (int i=0; i < parameters.size(); ++i)
     {
+        AudioProcessorParameter* const param = parameters.getUnchecked(i);
+        const String paramName = param->getName(0xff);
+
         if (i == 0)
             text += "    lv2:port [\n";
         else
@@ -328,21 +334,35 @@ static const String makePluginFile (AudioProcessor* const filter, const int maxN
 
         text += "        a lv2:InputPort, lv2:ControlPort ;\n";
         text += "        lv2:index " + String(portIndex++) + " ;\n";
-        text += "        lv2:symbol \"" + nameToSymbol(filter->getParameterName(i), i) + "\" ;\n";
 
-        if (filter->getParameterName(i).isNotEmpty())
-            text += "        lv2:name \"" + filter->getParameterName(i) + "\" ;\n";
-        else
-            text += "        lv2:name \"Port " + String(i+1) + "\" ;\n";
-
-        text += "        lv2:default " + String::formatted("%f", safeParamValue(filter->getParameter(i))) + " ;\n";
         text += "        lv2:minimum 0.0 ;\n";
         text += "        lv2:maximum 1.0 ;\n";
 
-        if (! filter->isParameterAutomatable(i))
-            text += "        lv2:portProperty <" LV2_PORT_PROPS__expensive "> ;\n";
+        if (param == bypassParameter)
+        {
+            text += "        lv2:default 1.0 ;\n";
+            text += "        lv2:symbol \"lv2_enabled\" ;\n";
+            text += "        lv2:name \"Enabled\" ;\n";
+            text += "        lv2:designation lv2:enabled ;\n";
+            text += "        lv2:portProperty lv2:toggled ;\n";
+        }
+        else
+        {
+            text += "        lv2:default " + String::formatted("%f", safeParamValue(param->getValue())) + " ;\n";
+            text += "        lv2:symbol \"" + nameToSymbol(paramName, i) + "\" ;\n";
 
-        if (i+1 == filter->getNumParameters())
+            if (paramName.isNotEmpty())
+                text += "        lv2:name \"" + paramName + "\" ;\n";
+            else
+                text += "        lv2:name \"Port " + String(i+1) + "\" ;\n";
+
+            if (param->isBoolean())
+                text += "        lv2:portProperty lv2:toggled ;\n";
+            if (! param->isAutomatable())
+                text += "        lv2:portProperty <" LV2_PORT_PROPS__expensive "> ;\n";
+        }
+
+        if (i+1 == parameters.size())
             text += "    ] ;\n\n";
         else
             text += "    ] ,\n";
@@ -393,6 +413,8 @@ static const String makePresetsFile (AudioProcessor* const filter)
     const int numPrograms = filter->getNumPrograms();
     const String presetSeparator(pluginURI.contains("#") ? ":" : "#");
 
+    const Array<AudioProcessorParameter*>& parameters = filter->getParameters();
+
     for (int i = 0; i < numPrograms; ++i)
     {
         std::cout << "\nSaving preset " << i+1 << "/" << numPrograms+1 << "...";
@@ -422,7 +444,7 @@ static const String makePresetsFile (AudioProcessor* const filter)
         preset += "            rdf:value \"" + chunkString + "\"^^xsd:base64Binary ;\n";
         preset += "        ] ;\n";
  #endif
-        if (filter->getNumParameters() == 0)
+        if (parameters.isEmpty())
         {
             preset += "    ] .\n\n";
             continue;
@@ -434,17 +456,19 @@ static const String makePresetsFile (AudioProcessor* const filter)
         // Port values
         usedSymbols.clear();
 
-        for (int j=0; j < filter->getNumParameters(); ++j)
+        for (int j=0; j < parameters.size(); ++j)
         {
-              if (j == 0)
+            AudioProcessorParameter* const param = parameters.getUnchecked(i);
+
+            if (j == 0)
                 preset += "    lv2:port [\n";
             else
                 preset += "    [\n";
 
-            preset += "        lv2:symbol \"" + nameToSymbol(filter->getParameterName(j), j) + "\" ;\n";
-            preset += "        pset:value " + String::formatted("%f", safeParamValue(filter->getParameter(j))) + " ;\n";
+            preset += "        lv2:symbol \"" + nameToSymbol(param->getName(0xff), j) + "\" ;\n";
+            preset += "        pset:value " + String::formatted("%f", safeParamValue(param->getValue())) + " ;\n";
 
-            if (j+1 == filter->getNumParameters())
+            if (j+1 == parameters.size())
                 preset += "    ] ";
             else
                 preset += "    ] ,\n";
@@ -466,6 +490,9 @@ static void createLv2Files(const char* basename)
 
     int maxNumInputChannels, maxNumOutputChannels;
     findMaxTotalChannels(filter, maxNumInputChannels, maxNumOutputChannels);
+
+    filter->setPlayConfigDetails (maxNumInputChannels, maxNumOutputChannels, 0, 0);
+    filter->refreshParameterList();
 
     String binary(basename);
     String binaryTTL(binary + ".ttl");
