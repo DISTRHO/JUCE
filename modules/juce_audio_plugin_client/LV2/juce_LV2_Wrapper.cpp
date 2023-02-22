@@ -911,7 +911,16 @@ public:
         portControls.insertMultiple (0, nullptr, parameters.size());
 
         for (int i=0; i < parameters.size(); ++i)
-            lastControlValues.add (parameters.getUnchecked(i)->getValue());
+        {
+            AudioProcessorParameter* const param = parameters.getUnchecked (i);
+
+            float value = param->getValue();
+
+            if (param == bypassParameter)
+                value = 1.f - value;
+
+            lastControlValues.add (value);
+        }
 
         curPosInfo.resetToDefault();
 
@@ -1522,6 +1531,10 @@ public:
                 if (AudioProcessorParameter* const param = parameters[i])
                 {
                     value = param->getValue();
+
+                    if (param == bypassParameter)
+                        value = 1.f - value;
+
                     lastControlValues.setUnchecked (i, value);
 
                     if (float* const portControlPtr = portControls.getUnchecked(i))
