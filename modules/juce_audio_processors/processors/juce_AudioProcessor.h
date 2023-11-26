@@ -1117,6 +1117,11 @@ public:
     virtual void processorLayoutsChanged();
 
     //==============================================================================
+    /** LV2 specific calls, saving/restore as string. */
+    virtual String getStateInformationString () { return String(); }
+    virtual void setStateInformationString (const String&) {}
+
+    //==============================================================================
     /** Adds a listener that will be called when an aspect of this processor changes. */
     virtual void addListener (AudioProcessorListener* newListener);
 
@@ -1200,6 +1205,7 @@ public:
         wrapperType_AudioUnitv3,
         wrapperType_RTAS,
         wrapperType_AAX,
+        wrapperType_LV2,
         wrapperType_Standalone,
         wrapperType_Unity
     };
