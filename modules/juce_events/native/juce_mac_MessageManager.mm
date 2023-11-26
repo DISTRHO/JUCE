@@ -369,6 +369,7 @@ void MessageManager::runDispatchLoop()
 static void shutdownNSApp()
 {
     [NSApp stop: nil];
+    [NSEvent stopPeriodicEvents];
     [NSEvent startPeriodicEventsAfterDelay: 0  withPeriod: 0.1];
 }
 

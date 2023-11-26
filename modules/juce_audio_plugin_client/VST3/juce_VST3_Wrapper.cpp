@@ -2625,6 +2625,9 @@ public:
     //==============================================================================
     void processParameterChanges (Vst::IParameterChanges& paramChanges)
     {
+        if (juceVST3EditController == nullptr)
+            return;
+
         jassert (pluginInstance != nullptr);
 
         auto numParamsChanged = paramChanges.getParameterCount();

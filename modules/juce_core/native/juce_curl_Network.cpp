@@ -338,6 +338,9 @@ public:
         // or 3) data is in the in buffer
         while ((! finished) && curlBuffer.getSize() == 0)
         {
+            if (Thread::currentThreadShouldExit())
+                return false;
+
             {
                 const ScopedLock lock (cleanupLock);
 
