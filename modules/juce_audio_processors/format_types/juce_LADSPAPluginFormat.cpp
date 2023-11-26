@@ -25,7 +25,7 @@
 
 #if JUCE_PLUGINHOST_LADSPA && JUCE_LINUX
 
-#include <ladspa.h>
+#include "ladspa.h"
 
 namespace juce
 {
