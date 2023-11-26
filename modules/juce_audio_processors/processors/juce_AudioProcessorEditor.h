@@ -218,7 +218,6 @@ private:
     bool resizableByHost = false;
     ComponentBoundsConstrainer defaultConstrainer;
     ComponentBoundsConstrainer* constrainer = nullptr;
-    Component::SafePointer<Component> splashScreen;
     AffineTransform hostScaleTransform;
 
     JUCE_DECLARE_NON_COPYABLE (AudioProcessorEditor)
