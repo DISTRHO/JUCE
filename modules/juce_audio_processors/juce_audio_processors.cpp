@@ -34,7 +34,9 @@
 
 #define JUCE_CORE_INCLUDE_NATIVE_HEADERS 1
 #define JUCE_CORE_INCLUDE_OBJC_HELPERS 1
-#define JUCE_GUI_BASICS_INCLUDE_XHEADERS 1
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
+ #define JUCE_GUI_BASICS_INCLUDE_XHEADERS 1
+#endif
 #define JUCE_GUI_BASICS_INCLUDE_SCOPED_THREAD_DPI_AWARENESS_SETTER 1
 
 #include "juce_audio_processors.h"
@@ -241,9 +243,11 @@ struct AutoResizingNSViewComponentWithParent  : public AutoResizingNSViewCompone
 #include "format_types/juce_VSTPluginFormat.cpp"
 #include "format_types/juce_VST3PluginFormat.cpp"
 #include "format_types/juce_AudioUnitPluginFormat.mm"
-#include "scanning/juce_KnownPluginList.cpp"
-#include "scanning/juce_PluginDirectoryScanner.cpp"
-#include "scanning/juce_PluginListComponent.cpp"
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
+ #include "scanning/juce_KnownPluginList.cpp"
+ #include "scanning/juce_PluginDirectoryScanner.cpp"
+ #include "scanning/juce_PluginListComponent.cpp"
+#endif
 #include "processors/juce_AudioProcessorParameterGroup.cpp"
 #include "utilities/juce_AudioProcessorParameterWithID.cpp"
 #include "utilities/juce_RangedAudioParameter.cpp"
@@ -251,6 +255,13 @@ struct AutoResizingNSViewComponentWithParent  : public AutoResizingNSViewCompone
 #include "utilities/juce_AudioParameterInt.cpp"
 #include "utilities/juce_AudioParameterBool.cpp"
 #include "utilities/juce_AudioParameterChoice.cpp"
-#include "utilities/juce_ParameterAttachments.cpp"
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
+ #include "utilities/juce_ParameterAttachments.cpp"
+#endif
 #include "utilities/juce_AudioProcessorValueTreeState.cpp"
 #include "utilities/juce_PluginHostType.cpp"
+
+#if JUCE_AUDIOPROCESSOR_NO_GUI
+// commonly used classes in DSP code
+namespace juce { Colour::Colour(juce::uint32) noexcept {} }
+#endif
