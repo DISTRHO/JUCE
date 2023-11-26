@@ -1184,7 +1184,7 @@ public:
         String xMeterID, yMeterID;
     };
 
-    virtual CurveData getResponseCurve (CurveData::Type /*curveType*/) const      { return {}; }
+    virtual CurveData getResponseCurve (CurveData::Type /*curveType*/) const      { return CurveData(); }
 
     //==============================================================================
     /** Not for public use - this is called before deleting an editor component. */
