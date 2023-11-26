@@ -162,6 +162,7 @@ private:
         void operator() (LPWSTR ptr) const noexcept { CoTaskMemFree (ptr); }
     };
 
+   #if JUCE_MSVC
     bool showDialog (IFileDialog& dialog, bool async)
     {
         FILEOPENDIALOGOPTIONS flags = {};
@@ -371,6 +372,7 @@ private:
 
         return result;
     }
+   #endif
 
     Array<URL> openDialogPreVista (bool async)
     {
@@ -480,11 +482,13 @@ private:
 
         const Remover remover (*this);
 
+       #if JUCE_MSVC
         if (SystemStats::getOperatingSystemType() >= SystemStats::WinVista
             && customComponent == nullptr)
         {
             return openDialogVistaAndUp (async);
         }
+       #endif
 
         return openDialogPreVista (async);
     }
