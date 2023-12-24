@@ -2096,8 +2096,10 @@ bool AudioProcessorGraph::AudioGraphIOProcessor::producesMidi() const
 bool AudioProcessorGraph::AudioGraphIOProcessor::isInput() const noexcept           { return type == audioInputNode  || type == midiInputNode; }
 bool AudioProcessorGraph::AudioGraphIOProcessor::isOutput() const noexcept          { return type == audioOutputNode || type == midiOutputNode; }
 
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
 bool AudioProcessorGraph::AudioGraphIOProcessor::hasEditor() const                  { return false; }
 AudioProcessorEditor* AudioProcessorGraph::AudioGraphIOProcessor::createEditor()    { return nullptr; }
+#endif
 
 int AudioProcessorGraph::AudioGraphIOProcessor::getNumPrograms()                    { return 0; }
 int AudioProcessorGraph::AudioGraphIOProcessor::getCurrentProgram()                 { return 0; }
@@ -2310,8 +2312,10 @@ private:
         double getTailLengthSeconds() const override                  { return {}; }
         bool acceptsMidi() const override                             { return midiIn  == MidiIn ::yes; }
         bool producesMidi() const override                            { return midiOut == MidiOut::yes; }
+       #if ! JUCE_AUDIOPROCESSOR_NO_GUI
         AudioProcessorEditor* createEditor() override                 { return {}; }
         bool hasEditor() const override                               { return {}; }
+       #endif
         int getNumPrograms() override                                 { return 1; }
         int getCurrentProgram() override                              { return {}; }
         void setCurrentProgram (int) override                         {}

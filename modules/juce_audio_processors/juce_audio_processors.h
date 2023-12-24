@@ -138,14 +138,18 @@
 #include "processors/juce_AudioProcessorParameter.h"
 #include "processors/juce_HostedAudioProcessorParameter.h"
 #include "processors/juce_AudioProcessorEditorHostContext.h"
-#include "processors/juce_AudioProcessorEditor.h"
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
+ #include "processors/juce_AudioProcessorEditor.h"
+#endif
 #include "processors/juce_AudioProcessorListener.h"
 #include "processors/juce_AudioProcessorParameterGroup.h"
 #include "processors/juce_AudioProcessor.h"
 #include "processors/juce_PluginDescription.h"
 #include "processors/juce_AudioPluginInstance.h"
 #include "processors/juce_AudioProcessorGraph.h"
-#include "processors/juce_GenericAudioProcessorEditor.h"
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
+ #include "processors/juce_GenericAudioProcessorEditor.h"
+#endif
 #include "format/juce_AudioPluginFormat.h"
 #include "format/juce_AudioPluginFormatManager.h"
 #include "scanning/juce_KnownPluginList.h"
@@ -164,7 +168,9 @@
 #include "utilities/juce_AudioParameterInt.h"
 #include "utilities/juce_AudioParameterBool.h"
 #include "utilities/juce_AudioParameterChoice.h"
-#include "utilities/juce_ParameterAttachments.h"
+#if ! JUCE_AUDIOPROCESSOR_NO_GUI
+ #include "utilities/juce_ParameterAttachments.h"
+#endif
 #include "utilities/juce_AudioProcessorValueTreeState.h"
 #include "utilities/juce_PluginHostType.h"
 #include "utilities/ARA/juce_ARADebug.h"
