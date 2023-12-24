@@ -34,6 +34,7 @@ struct PluginUtilities
 {
     PluginUtilities() = delete;
 
+   #if ! JUCE_AUDIOPROCESSOR_NO_GUI
     static int getDesktopFlags (const AudioProcessorEditor& editor)
     {
         return editor.wantsLayerBackedView()
@@ -50,6 +51,7 @@ struct PluginUtilities
     {
         editor.addToDesktop (getDesktopFlags (editor), parent);
     }
+   #endif
 
     static const PluginHostType& getHostType()
     {
