@@ -218,15 +218,21 @@ bool Process::openDocument (const String& fileName, const String& parameters)
 
     const char* const argv[] = { "/bin/sh", "-c", cmdString.toUTF8(), nullptr };
 
+#if JUCE_USE_VFORK
+    const auto cpid = vfork();
+#else
     const auto cpid = fork();
+#endif
 
     if (cpid == 0)
     {
+#if ! JUCE_USE_VFORK
         setsid();
+#endif
 
         // Child process
-        execv (argv[0], (char**) argv);
-        exit (0);
+        if (execv (argv[0], (char**) argv) < 0)
+            _exit (0);
     }
 
     return cpid >= 0;
