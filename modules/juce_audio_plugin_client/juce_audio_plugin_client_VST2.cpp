@@ -1778,7 +1778,7 @@ private:
 
     pointer_sized_int handleGetPlugInName (VstOpCodeArguments args)
     {
-        String (JucePlugin_Name).copyToUTF8 ((char*) args.ptr, 64 + 1);
+        String (processor->getName()).copyToUTF8 ((char*) args.ptr, 64 + 1);
         return 1;
     }
 
