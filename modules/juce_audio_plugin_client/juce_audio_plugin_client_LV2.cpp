@@ -45,7 +45,10 @@
 #include <juce_audio_processors/utilities/juce_FlagCache.h>
 #include <juce_audio_processors/format_types/juce_LegacyAudioParameter.cpp>
 
-#include "JuceLV2Defines.h"
+#ifndef JucePlugin_LV2URI
+ #include "JuceLV2Defines.h"
+#endif
+
 #include <juce_audio_processors/format_types/juce_LV2Common.h>
 
 #include <fstream>
