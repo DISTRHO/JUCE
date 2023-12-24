@@ -239,9 +239,6 @@ public:
         // You must at least have some channels
         jassert (processor->isMidiEffect() || (maxNumInChannels > 0 || maxNumOutChannels > 0));
 
-        if (processor->isMidiEffect())
-            maxNumInChannels = maxNumOutChannels = 2;
-
        #ifdef JucePlugin_PreferredChannelConfigurations
         processor->setPlayConfigDetails (maxNumInChannels, maxNumOutChannels, 44100.0, 1024);
        #endif
