@@ -43,6 +43,7 @@ if(JUCE_BUILD_HELPER_TOOLS)
         juce::juce_recommended_warning_flags)
 
     set_target_properties(juceaide PROPERTIES
+        CXX_STANDARD 14
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
     export(TARGETS juceaide

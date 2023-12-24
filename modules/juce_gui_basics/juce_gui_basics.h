@@ -57,6 +57,8 @@
 #include <juce_graphics/juce_graphics.h>
 #include <juce_data_structures/juce_data_structures.h>
 
+#include <utility>
+
 //==============================================================================
 /** Config: JUCE_ENABLE_REPAINT_DEBUGGING
     If this option is turned on, each area of the screen that gets repainted will
