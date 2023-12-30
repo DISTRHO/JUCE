@@ -12,6 +12,12 @@
 
 #if JucePlugin_Build_LV2
 
+#if JUCE_WINDOWS
+/* The "juce_IncludeSystemHeaders.h" header will unset _WIN32_WINNT which breaks mingw
+ * So we include system headers early to prevent build issues. */
+#include <condition_variable>
+#endif
+
 #include "../utility/juce_IncludeSystemHeaders.h"
 
 /** Plugin requires processing with a fixed/constant block size */
