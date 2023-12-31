@@ -622,8 +622,15 @@ function(_juce_add_xcode_entitlements source_target dest_target)
 endfunction()
 
 function(_juce_configure_bundle source_target dest_target)
-    _juce_generate_icon(${source_target} ${dest_target})
     _juce_write_configure_time_info(${source_target})
+
+    get_target_property(juce_kind_string ${dest_target} JUCE_TARGET_KIND_STRING)
+
+    if(juce_kind_string STREQUAL "LV2")
+        return()
+    endif()
+
+    _juce_generate_icon(${source_target} ${dest_target})
 
     if(NOT APPLE)
         return()
@@ -642,8 +649,6 @@ function(_juce_configure_bundle source_target dest_target)
     set(this_output_info_dir "${juce_library_code}/${dest_target}")
     set(this_output_pkginfo "${this_output_info_dir}/PkgInfo")
     set(this_output_plist "${this_output_info_dir}/Info.plist")
-
-    get_target_property(juce_kind_string ${dest_target} JUCE_TARGET_KIND_STRING)
 
     _juce_execute_juceaide(plist "${juce_kind_string}" "${input_info_file}" "${this_output_plist}")
     set_target_properties(${dest_target} PROPERTIES
@@ -940,7 +945,7 @@ function(_juce_set_plugin_target_properties shared_code_target kind)
         set_target_properties(${target_name} PROPERTIES
             BUNDLE_EXTENSION lv2
             PREFIX ""
-            BUNDLE TRUE
+            BUNDLE FALSE
             LIBRARY_OUTPUT_DIRECTORY "${output_path}"
             XCODE_ATTRIBUTE_WRAPPER_EXTENSION lv2
             XCODE_ATTRIBUTE_LIBRARY_STYLE Bundle
