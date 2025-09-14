@@ -86,8 +86,9 @@ target_compile_definitions(Projucer PRIVATE
     JUCE_LOAD_CURL_SYMBOLS_LAZILY=1
     JUCE_LOG_ASSERTIONS=1
     JUCE_STRICT_REFCOUNTEDPOINTER=1
-    JUCE_USE_CURL=1
+    JUCE_USE_CURL=0
     JUCE_WEB_BROWSER=0
+    JUCER_ENABLE_GPL_MODE=1
     # This is a temporary workaround to allow builds to complete on Xcode 15.
     # Add -Wl,-ld_classic to the OTHER_LDFLAGS build setting if you need to
     # deploy to older versions of macOS.
